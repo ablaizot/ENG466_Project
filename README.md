@@ -1,8 +1,8 @@
 # What to do
-- make sure the basic implementation works
-- implement movement/collision
-- estimate the real distance to target
-- implement time/task utility and energy budget
+- make sure the basic implementation works (Aymeric)
+- implement movement/collision 
+- estimate task utility and with regard to energy budget (Petr)
+	- estimate real distance to target
 - implement limited communication range
 
 #### Questions
