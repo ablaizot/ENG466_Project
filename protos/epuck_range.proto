@@ -7,6 +7,10 @@
 # More info here: http://www.e-puck.org.
 # template language: javascript
 
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/robots/gctronic/e-puck/protos/E-puckDistanceSensor.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/Copper.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/solids/protos/SolidPipe.proto"
+
 PROTO epuck_range [
   field SFVec3f            translation                  0 0 0                    # Is `Transform.translation`.
   field SFRotation         rotation                     0 0 1 0                  # Is `Transform.rotation`.
