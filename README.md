@@ -3,6 +3,7 @@
 - implement movement/collision
 - estimate the real distance to target
 - implement time/task utility and energy budget
+- implement limited communication range
 
 #### Questions
 - Auctioning in order - does it have to be the case, is it known to robots?
