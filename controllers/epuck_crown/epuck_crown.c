@@ -124,6 +124,11 @@ static void receive_updates()
         // save a copy, cause wb_receiver_next_packet invalidates the pointer
         memcpy(&msg, pmsg, sizeof(message_t));
         wb_receiver_next_packet(receiver_tag);
+        printf("Received message for robot %d\n", msg.robot_id);
+        
+        // print message
+            printf("Message details: event_id=%d, event_state=%d, event_x=%.2f, event_y=%.2f, event_index=%d\n",
+                msg.event_id, msg.event_state, msg.event_x, msg.event_y, msg.event_index);
 
         // double check this message is for me
         // communication should be on specific channel per robot

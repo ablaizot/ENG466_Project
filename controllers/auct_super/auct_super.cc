@@ -178,6 +178,8 @@ private:
     assert(num_active_events_ < NUM_ACTIVE_EVENTS); // check max. active events not reached
     num_active_events_++;
     t_next_event_ = clock_ + expovariate(EVENT_GENERATION_DELAY);
+    printf("New event %d at time %llu ms, total active events: %d\n",
+      next_event_id_-1, clock_, num_active_events_);
   }
 
   // Init robot and get robot_ids and receivers
@@ -290,6 +292,7 @@ private:
           event->assigned_to_ = event->best_bidder_;
           event_queue.emplace_back(event.get(), MSG_EVENT_WON); // FIXME?
           auction = NULL;
+          
           printf("W robot %d won event %d\n", event->assigned_to_, event->id_);
 
         // Restart (incl. announce) if no bids
@@ -370,8 +373,7 @@ public:
     markEventsDone(event_queue);
 
     // ** Add a random new event, if the time has come
-    assert(t_next_event_ > 0);
-    if (clock_ >= t_next_event_ && num_active_events_ < NUM_ACTIVE_EVENTS) {
+    if (num_active_events_ < NUM_ACTIVE_EVENTS) {
       addEvent();
     }
 
@@ -382,12 +384,14 @@ public:
     for (int i=0;i<NUM_ROBOTS;i++) {
       // Check if we're receiving data
       if (wb_receiver_get_queue_length(receivers_[i]) > 0) {
+        printf("Receiving bid from robot %d\n", i);
         assert(wb_receiver_get_queue_length(receivers_[i]) > 0);
         assert(wb_receiver_get_data_size(receivers_[i]) == sizeof(bid_t));
         
         pbid = (bid_t*) wb_receiver_get_data(receivers_[i]); 
         assert(pbid->robot_id == i);
-
+        printf("B robot %d bid %.2f for event %d\n", pbid->robot_id,
+          pbid->value, pbid->event_id);
         Event* event = events_.at(pbid->event_id).get();
         event->updateAuction(pbid->robot_id, pbid->value, pbid->event_index);
         // TODO: Refactor this (same code above in handleAuctionEvents)
