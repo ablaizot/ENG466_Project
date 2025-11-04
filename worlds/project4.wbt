@@ -1,7 +1,7 @@
 #VRML_SIM R2025a utf8
 
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/robots/gctronic/e-puck/protos/E-puck.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/floors/protos/RectangleArena.proto"
-EXTERNPROTO "../protos/epuck_range.proto"
 
 WorldInfo {
   info [
@@ -9,53 +9,16 @@ WorldInfo {
     "Author: Simon Blanchoud"
     "Date: 26 SEP 2006"
   ]
-  title "Lab05 Threshold"
+  title "Lab08 Market"
 }
 Viewpoint {
-  orientation -0.28966530918016975 0.39408463144532774 0.872233519142756 1.2375226820714158
-  position -0.6099543445402503 -1.6947787694476457 1.8368912591329167
+  orientation -0.605943522581291 -0.06582921297816308 0.7927792644617113 3.26280112980577
+  position 0.8978375946626922 -0.09822000753614829 3.0783395826509103
 }
 Background {
   skyColor [
-    0.15 0.15 0.15
+    0.4 0.7 1
   ]
-}
-RectangleArena {
-  rotation 0 0 1 1.5707963267948966
-  floorSize 1.25 1.25
-}
-Solid {
-  translation 0.125 0.225 0
-  rotation 0 0 1 1.57079
-  children [
-    Shape {
-      appearance Appearance {
-        material Material {
-          diffuseColor 0.5 0.5 0.5
-        }
-      }
-      geometry Box {
-        size 0.85 0.01 0.1
-      }
-    }
-  ]
-  name "wall2"
-}
-Solid {
-  translation -0.45 0 0
-  children [
-    Shape {
-      appearance Appearance {
-        material Material {
-          diffuseColor 0.5 0.5 0.5
-        }
-      }
-      geometry Box {
-        size 0.375 0.01 0.1
-      }
-    }
-  ]
-  name "wall1"
 }
 PointLight {
   attenuation 0 0 0.5
@@ -71,7 +34,7 @@ Robot {
   children [
     DEF sup_emitter Emitter {
       name "sup_emitter"
-      channel 5
+      channel 2
     }
     DEF rec1 Receiver {
       name "rec1"
@@ -127,263 +90,284 @@ Robot {
   controller "auct_super"
   supervisor TRUE
 }
-DEF e0 Transform {
-  translation -0.4431976532936097 0.12301835060119626 0.01
-  scale 0.5 0.5 0.5
-  children [
-    Shape {
-      appearance Appearance {
-        material Material {
-          diffuseColor 0 0 1
-        }
-      }
-      geometry Cylinder {
-        height 0.1
-        radius 0.05
-      }
-    }
-  ]
-}
-DEF e1 Transform {
-  translation 0.2812263393402099 -0.29198454380035405 0.01
-  scale 0.5 0.5 0.5
-  children [
-    Shape {
-      appearance Appearance {
-        material Material {
-          diffuseColor 0 0 1
-        }
-      }
-      geometry Cylinder {
-        height 0.1
-        radius 0.05
-      }
-    }
-  ]
-}
-DEF e2 Transform {
-  translation 0.29975711345672595 0.11833070755004871 0.01
-  scale 0.5 0.5 0.5
-  children [
-    Shape {
-      appearance Appearance {
-        material Material {
-          ambientIntensity 0.5
-          diffuseColor 0 0 1
-          shininess 0.5
-        }
-      }
-      geometry Cylinder {
-        height 0.1
-        radius 0.05
-      }
-    }
-  ]
-}
-DEF e3 Transform {
-  translation -0.33384372353553776 0.0972729349136352 0.01
-  scale 0.5 0.5 0.5
-  children [
-    Shape {
-      appearance Appearance {
-        material Material {
-          diffuseColor 0 0 1
-        }
-      }
-      geometry Cylinder {
-        height 0.1
-        radius 0.05
-      }
-    }
-  ]
-}
-DEF e4 Transform {
-  translation -0.35841722846031193 -0.26612926483154303 0.01
-  scale 0.5 0.5 0.5
-  children [
-    Shape {
-      appearance Appearance {
-        material Material {
-          diffuseColor 0 0 1
-        }
-      }
-      geometry Cylinder {
-        height 0.1
-        radius 0.05
-      }
-    }
-  ]
-}
-DEF e5 Transform {
-  translation 0.3266378545761107 0.020329656600952095 0.01
-  scale 0.5 0.5 0.5
-  children [
-    Shape {
-      appearance Appearance {
-        material Material {
-          diffuseColor 0 0 1
-        }
-      }
-      geometry Cylinder {
-        height 0.1
-        radius 0.05
-      }
-    }
-  ]
-}
-DEF e6 Transform {
-  translation 0.0437678718566894 0.238598027229309 0.01
-  scale 0.5 0.5 0.5
-  children [
-    Shape {
-      appearance Appearance {
-        material Material {
-          diffuseColor 1 0 0
-        }
-      }
-      geometry Cylinder {
-        height 0.1
-        radius 0.05
-      }
-    }
-  ]
-}
-DEF e7 Transform {
-  translation -0.6070820490270854 0.04812592506408686 0.01
-  scale 0.5 0.5 0.5
-  children [
-    Shape {
-      appearance Appearance {
-        material Material {
-          diffuseColor 1 0 0
-        }
-      }
-      geometry Cylinder {
-        height 0.1
-        radius 0.05
-      }
-    }
-  ]
-}
-DEF e8 Transform {
-  translation 0.5311362648010254 -0.4513277864456178 0.01
-  scale 0.5 0.5 0.5
-  children [
-    Shape {
-      appearance Appearance {
-        material Material {
-          diffuseColor 1 0 0
-        }
-      }
-      geometry Cylinder {
-        height 0.1
-        radius 0.05
-      }
-    }
-  ]
-}
-DEF e9 Transform {
-  translation 0.023222866058349556 -0.09122159242630012 0.01
-  scale 0.5 0.5 0.5
-  children [
-    Shape {
-      appearance Appearance {
-        material Material {
-          diffuseColor 1 0 0
-        }
-      }
-      geometry Cylinder {
-        height 0.1
-        radius 0.05
-      }
-    }
-  ]
-}
-DEF e-puck0 epuck_range {
-  hidden position_0_0 1.6023110046959608
-  hidden position_0_1 1.602311005233281
-  hidden linearVelocity_0 0.010894269099778977 0.026006790604318358 -1.5684865213265583e-09
-  hidden angularVelocity_0 -0.7028834728125742 0.2944385492556635 -0.001847873111379537
-  hidden rotation_1 0 1 0 1.6023110046959608
-  hidden linearVelocity_1 0.01855071973989768 0.04427725809827206 -0.0011162428218255641
-  hidden angularVelocity_1 -0.7028834742353807 0.2944385498517744 -0.0018478731147351798
-  hidden rotation_2 0 0.9999999999999999 0 1.602311005233281
-  hidden linearVelocity_2 0.0032378051485835485 0.007736290527350861 0.0011161111267461177
-  hidden angularVelocity_2 -0.7028834713896968 0.29443854865970387 -0.0018478731072646404
-  translation -0.2960350325692316 0.02034777708965328 0.03681379379323148
-  rotation 0.7195189639663988 0.5151613500874085 0.46572657629647735 1.84822791714776
+DEF e-puck0 E-puck {
+  hidden position_0_0 31.16778574966841
+  hidden position_0_1 21.56160282910394
+  hidden linearVelocity_0 -2.0980951471337207e-05 -1.8703439124490602e-05 1.75158653574463e-08
+  hidden angularVelocity_0 0.0012468557552250878 -0.001398685017824031 -5.087498037499735e-10
+  hidden rotation_1 0 0.9999999999999999 0 6.0350445209500645
+  hidden linearVelocity_1 -2.79740602177992e-05 -2.493743589959208e-05 2.0855044318590017e-11
+  hidden angularVelocity_1 0.00124685576616813 -0.0013986850301319362 -7.299699916257787e-10
+  hidden rotation_2 0 -1 0 3.571138399614406
+  hidden linearVelocity_2 -2.7974055939697807e-05 -2.4937432074513573e-05 2.265839581441807e-11
+  hidden angularVelocity_2 0.0012468557683674875 -0.001398685033716319 -2.8753114704845775e-10
+  translation -0.36923021011651674 0.6975375576210103 -6.409085575649794e-05
+  rotation 0.0006691288152868299 -0.0017932553691855152 0.999998168249227 0.7280602939650604
   name "e-puck0"
   controller "epuck_crown"
 }
-DEF e-puck1 epuck_range {
-  hidden position_0_0 0.8011437028741305
-  hidden position_0_1 0.8011437028704813
-  hidden linearVelocity_0 -1.3039652184988297e-14 -2.8748142785172045e-15 1.0894988614988204e-15
-  hidden angularVelocity_0 -8.735794287085224e-14 4.461762038338461e-15 -2.2338085272754272e-16
-  hidden rotation_1 0 0.9999999999999999 0 0.8011437028741306
-  hidden linearVelocity_1 -1.2327672792404867e-14 -4.051794491871547e-16 1.3858690287137404e-16
-  hidden angularVelocity_1 -6.191840598587608e-14 -6.168130187864397e-13 -2.2379006721294507e-16
-  hidden rotation_2 0 1 0 0.8011437028704812
-  hidden linearVelocity_2 -1.234177755212941e-14 -2.3919197549332873e-15 1.2297757858937262e-15
-  hidden angularVelocity_2 5.179667236996548e-13 -6.173588704269195e-13 -2.0667198255371832e-16
-  translation 0.5518269050901948 -0.5826550202714529 -8.164107312839605e-05
-  rotation 9.968079731979735e-05 -0.9999980492465269 0.0019727054720625457 1.6895675489510172e-05
+DEF e-puck1 E-puck {
+  hidden position_0_0 57.983124729271495
+  hidden position_0_1 64.51767890489778
+  hidden linearVelocity_0 -4.517211799927312e-16 1.1895235592247292e-14 -1.1842378929335004e-15
+  hidden angularVelocity_0 1.464286395338109e-14 -2.2815418592911635e-13 2.2170745739134758e-13
+  hidden rotation_1 0 -1 0 4.84872834252437
+  hidden linearVelocity_1 -3.2688271914919727e-15 1.764981477055149e-14 1.875997471799322e-15
+  hidden angularVelocity_1 -8.426290230057415e-13 -2.812000813341021e-13 2.2179012012002672e-13
+  hidden rotation_2 0 1 0 1.6858258331019136
+  hidden linearVelocity_2 -5.931473988526879e-16 7.391708078955655e-15 -1.3008852297081629e-15
+  hidden angularVelocity_2 -4.0823765369074423e-13 1.56794594547073e-13 2.218791373086841e-13
+  translation -0.6113254448467565 -0.5370531096337272 -7.018217799758565e-05
+  rotation -8.412693469233174e-06 -9.549251675248533e-06 -0.9999999999190192 1.4653069302597486
   name "e-puck1"
   controller "epuck_crown"
-  emitter_channel 2
+  emitter_channel 0
   receiver_channel 2
 }
-DEF e-puck2 epuck_range {
-  hidden position_0_0 0.8011452548922365
-  hidden position_0_1 0.8011422224997012
-  hidden linearVelocity_0 -2.7231682712602195e-11 8.35319010169799e-10 -6.664169897400522e-10
-  hidden angularVelocity_0 -1.2374787665628213e-10 5.4574613775432154e-11 6.169084336391619e-12
-  hidden rotation_1 0 1 0 0.8011452548922365
-  hidden linearVelocity_1 -2.7103319424618073e-11 8.359212976806161e-10 -6.627531938821004e-10
-  hidden angularVelocity_1 -2.492345056972019e-10 8.437049928282098e-10 5.907266341627931e-12
-  hidden rotation_2 0 1 0 0.801142222499701
-  hidden linearVelocity_2 -2.678981854208718e-11 8.359742103294408e-10 -6.568734649915681e-10
-  hidden angularVelocity_2 -2.1475478527843825e-10 6.279982670511295e-10 5.9853374541246595e-12
-  translation 0.4833144929017084 0.29211440196646526 0.04726084958963799
-  rotation -0.002086623129564952 0.00010934452506160944 0.9999978170214624 0.15754833262326015
+DEF e-puck2 E-puck {
+  hidden position_0_0 75.12529659077015
+  hidden position_0_1 92.57197512974963
+  hidden linearVelocity_0 -0.010330580477634382 0.04875728302945869 1.596351907130767e-05
+  hidden angularVelocity_0 6.661107335238499e-05 -0.00030159139514316383 1.6344444397344704
+  hidden rotation_1 0 -1 0 0.2729270953848906
+  hidden linearVelocity_1 -0.0013931522271401595 0.007231797240832555 -8.541295286284853e-06
+  hidden angularVelocity_1 -0.16027982107858385 -0.031179170800362085 1.6325861534340451
+  hidden rotation_2 0 0.9999999999999999 0 4.607380829235421
+  hidden linearVelocity_2 -0.019113227069644943 0.09033995385632024 -3.405175435649266e-05
+  hidden angularVelocity_2 -4.706844863936687 -0.9934924840625308 1.6632786037768046
+  translation 0.8545568530251683 -0.49174308410102735 -9.415933186906686e-05
+  rotation 0.0004747505600848836 0.000611390121222392 0.9999997004069677 1.8243634140881906
   name "e-puck2"
   controller "epuck_crown"
-  emitter_channel 3
+  emitter_channel 0
   receiver_channel 3
 }
-DEF e-puck3 epuck_range {
-  hidden position_0_0 0.8011432820839697
-  hidden position_0_1 0.8011427962109758
-  hidden linearVelocity_0 3.5964770838820456e-14 6.819257109223302e-13 3.5214497984270567e-13
-  hidden angularVelocity_0 -4.59720033218057e-11 3.1040702074450066e-12 2.4967785225115673e-14
-  hidden rotation_1 0 1 0 0.8011432820839696
-  hidden linearVelocity_1 4.967787136678108e-14 9.19548574954512e-13 -7.94149489567868e-13
-  hidden angularVelocity_1 -4.623704223300637e-11 1.9253484893014617e-12 2.7298463209368632e-14
-  hidden rotation_2 0 1 0 0.8011427962109757
-  hidden linearVelocity_2 5.2229892729794663e-14 9.165360222221494e-13 1.5079127049749374e-12
-  hidden angularVelocity_2 -4.6475045500829724e-11 2.03279574916744e-12 2.3230426322670863e-14
-  translation 0.4838394148786677 0.2868226730306391 -0.00012261449281305604
-  rotation -0.0018449330120170419 6.76166615986635e-05 0.999998295823632 0.17051770332210078
+DEF e-puck3 E-puck {
+  hidden position_0_0 74.52609946851328
+  hidden position_0_1 89.81036286947177
+  hidden linearVelocity_0 0.00019854073762613723 -9.029594151744403e-05 6.689664350336526e-05
+  hidden angularVelocity_0 -0.0028379384134777593 0.003913670540734894 0.00622179482629325
+  hidden rotation_1 0 -1 0 0.8721242176417575
+  hidden linearVelocity_1 0.0003641895669715741 9.85505299370135e-06 -3.986817485857138e-05
+  hidden angularVelocity_1 -0.0008202272790387716 0.013090897983684081 -0.0036507594718701436
+  hidden rotation_2 0 1 0 1.8457685689575636
+  hidden linearVelocity_2 0.0001221087727149565 5.513834533637517e-05 -7.480545878779583e-06
+  hidden angularVelocity_2 -0.002285044027477031 0.006431495568185104 0.004801698919067562
+  translation 0.5363893655552989 0.3336770561838342 -7.282393710116887e-05
+  rotation 0.0007404216614904846 -0.000398508813033931 -0.9999996464831821 -1.355117099775451
   name "e-puck3"
   controller "epuck_crown"
   emitter_channel 4
   receiver_channel 4
 }
-DEF e-puck4 epuck_range {
-  hidden position_0_0 0.8011437044326765
-  hidden position_0_1 0.8011441760631945
-  hidden linearVelocity_0 -9.85004721017202e-15 7.907475491816344e-15 -6.015928496102182e-15
-  hidden angularVelocity_0 -1.9538999429936837e-14 4.610069124323064e-15 -4.2163301310485876e-14
-  hidden rotation_1 0 1 0 0.8011437044326766
-  hidden linearVelocity_1 -9.566675468000029e-15 7.244845841323099e-15 2.055875017686286e-15
-  hidden angularVelocity_1 -3.770508898123191e-13 -5.012083273138859e-13 -4.320763470315293e-14
-  hidden rotation_2 0 1 0 0.8011441760631947
-  hidden linearVelocity_2 -1.0812844314231549e-14 8.422596091428666e-15 4.493198171268851e-16
-  hidden angularVelocity_2 -2.050701755071693e-13 -6.082695509438663e-13 -4.3544441918602875e-14
-  translation 0.5572214254920346 0.3200249336621766 -8.164107310742671e-05
-  rotation -8.444766434469166e-06 -3.5200958746675056e-05 -0.9999999993447893 0.471103103466489
+DEF e-puck4 E-puck {
+  hidden position_0_0 78.02505125118165
+  hidden position_0_1 80.17144225510002
+  hidden linearVelocity_0 -0.05131766577294338 -0.019696536329073054 -1.1339304227437942e-05
+  hidden angularVelocity_0 -0.0012872884967040467 -0.00027055343943942125 1.2039957728473356
+  hidden rotation_1 0 1 0 2.626827565026613
+  hidden linearVelocity_1 -0.02216612000276711 -0.008293391368276273 -4.113139753101827e-06
+  hidden angularVelocity_1 0.380566348113266 -0.9972679842657849 1.2049955971378201
+  hidden rotation_2 0 1 0 4.773218568944981
+  hidden linearVelocity_2 -0.0806767942745784 -0.030994893439715572 2.6897825837388705e-05
+  hidden angularVelocity_2 1.5996793425282019 -4.168573673133801 1.2338062294014196
+  translation 0.24763423451522149 -0.08636116211272075 -0.00011165164304883547
+  rotation -8.278045819075025e-05 0.00036782861379336125 0.9999999289247509 -2.7437364185200788
   name "e-puck4"
   controller "epuck_crown"
-  emitter_channel 5
+  emitter_channel 0
   receiver_channel 5
+}
+DEF e0 Pose {
+  translation 0 0 -0.13999999999999999
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+        }
+      }
+      geometry Cylinder {
+        height 0.05
+        radius 0.05
+      }
+    }
+  ]
+}
+DEF e1 Pose {
+  translation 0 0 -0.13999999999999999
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+        }
+      }
+      geometry Cylinder {
+        height 0.05
+        radius 0.05
+      }
+    }
+  ]
+}
+DEF e2 Pose {
+  translation 0 0 -0.13999999999999999
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+        }
+      }
+      geometry Cylinder {
+        height 0.05
+        radius 0.05
+      }
+    }
+  ]
+}
+DEF e3 Pose {
+  translation 0 0 -0.13999999999999999
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+        }
+      }
+      geometry Cylinder {
+        height 0.05
+        radius 0.05
+      }
+    }
+  ]
+}
+DEF e4 Pose {
+  translation 0 0 -0.13999999999999999
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+        }
+      }
+      geometry Cylinder {
+        height 0.05
+        radius 0.05
+      }
+    }
+  ]
+}
+DEF e5 Pose {
+  translation 0.4261040270328522 -0.7836985312402248 0.01
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 1 0 0.8
+        }
+      }
+      geometry Cylinder {
+        height 0.05
+        radius 0.05
+      }
+    }
+  ]
+}
+DEF e6 Pose {
+  translation 0.647085440158844 -0.2847941249608993 0.01
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 1 0 0.8
+        }
+      }
+      geometry Cylinder {
+        height 0.05
+        radius 0.05
+      }
+    }
+  ]
+}
+DEF e7 Pose {
+  translation 0.0156269788742065 -0.27197945415973657 0.01
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 1 0 0.8
+        }
+      }
+      geometry Cylinder {
+        height 0.05
+        radius 0.05
+      }
+    }
+  ]
+}
+DEF e8 Pose {
+  translation -0.37472915053367617 -0.5334345534443855 0.01
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 1 0 0.8
+        }
+      }
+      geometry Cylinder {
+        height 0.05
+        radius 0.05
+      }
+    }
+  ]
+}
+DEF e9 Pose {
+  translation 0.18616136312484732 -0.3066545456647872 0.01
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 1 0 0.8
+        }
+      }
+      geometry Cylinder {
+        height 0.05
+        radius 0.05
+      }
+    }
+  ]
+}
+
+RectangleArena {
+  rotation 0 0 1 1.5707963267948966
+  floorSize 1.25 1.25
+}
+Solid {
+  translation 0.125 0.225 0
+  rotation 0 0 1 1.57079
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.5 0.5 0.5
+        }
+      }
+      geometry Box {
+        size 0.85 0.01 0.1
+      }
+    }
+  ]
+  name "wall2"
+}
+Solid {
+  translation -0.45 0 0
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.5 0.5 0.5
+        }
+      }
+      geometry Box {
+        size 0.375 0.01 0.1
+      }
+    }
+  ]
+  name "wall1"
 }

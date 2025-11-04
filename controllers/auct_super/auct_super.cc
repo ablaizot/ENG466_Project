@@ -206,6 +206,8 @@ private:
     }
     wb_receiver_enable(receivers_[id], 2); //32
     wb_receiver_set_channel(receivers_[id], id+1);
+    // print receiver channel linking
+    printf("Linked receiver for robot %d on channel %d\n", id, wb_receiver_get_channel(receivers_[id]));
   }
 
   // Assemble a new message to be sent to robots
@@ -339,10 +341,7 @@ public:
     num_events_handled_ = 0;
     stat_total_distance_ = 0.0;
 
-    // add the first few events
-    for (int i=0; i<NUM_ACTIVE_EVENTS; ++i) {
-      addEvent();
-    }
+
 
     // link & initialize robots
     for (int i=0;i<NUM_ROBOTS;i++) {
@@ -359,6 +358,10 @@ public:
     if (!emitter_) {
       DBG(("Missing supervisor emitter!\n"));
       exit(1);
+    }
+    // add the first few events
+    for (int i=0; i<NUM_ACTIVE_EVENTS; ++i) {
+      addEvent();
     }
   }
 

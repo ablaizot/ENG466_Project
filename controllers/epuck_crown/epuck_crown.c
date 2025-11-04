@@ -124,11 +124,11 @@ static void receive_updates()
         // save a copy, cause wb_receiver_next_packet invalidates the pointer
         memcpy(&msg, pmsg, sizeof(message_t));
         wb_receiver_next_packet(receiver_tag);
-        printf("Received message for robot %d\n", msg.robot_id);
+        //printf("Received message for robot %d\n", msg.robot_id);
         
         // print message
-            printf("Message details: event_id=%d, event_state=%d, event_x=%.2f, event_y=%.2f, event_index=%d\n",
-                msg.event_id, msg.event_state, msg.event_x, msg.event_y, msg.event_index);
+            //printf("Message details: event_id=%d, event_state=%d, event_x=%.2f, event_y=%.2f, event_index=%d\n",
+                //msg.event_id, msg.event_state, msg.event_x, msg.event_y, msg.event_index);
 
         // double check this message is for me
         // communication should be on specific channel per robot
@@ -327,40 +327,46 @@ static void receive_updates()
                 
             // Send my bid to the supervisor
             const bid_t my_bid = {robot_id, msg.event_id, d, indx};
+            // print bid
+            printf("Robot %d bidding %.2f for event %d at index %d\n", robot_id, d, msg.event_id, indx);
+        
             wb_emitter_set_channel(emitter_tag, robot_id+1);
-            wb_emitter_send(emitter_tag, &my_bid, sizeof(bid_t));            
+            wb_emitter_send(emitter_tag, &my_bid, sizeof(bid_t));
+            // print emmitter channel
+            printf("Sent bid from robot %d on channel %d\n", robot_id, wb_emitter_get_channel(emitter_tag));            
         }
     }
     
     
     // Communication with physics plugin (channel 0)            
-    i = 0; k = 1;
-    while((int)target[i][2] != INVALID){i++;}
-    target_list_length = i; 
-    if(target_list_length > 0)
-    {        
-        // Line from my position to first target
-        wb_emitter_set_channel(emitter_tag,0);         
-        buff[0] = BREAK; // draw new line
-        buff[1] = my_pos[0]; 
-        buff[2] = my_pos[1];
-        buff[3] = target[0][0];
-        buff[4] = target[0][1];
-        // Lines between targets
-        for(i=5;i<5*target_list_length-1;i=i+5)
-        {
-            buff[i] = BREAK;
-            buff[i+1] = buff[i-2]; 
-            buff[i+2] = buff[i-1];
-            buff[i+3] = target[k][0]; 
-            buff[i+4] = target[k][1];
-            k++;  
+        i = 0; k = 1;
+        while((int)target[i][2] != INVALID){i++;}
+        target_list_length = i; 
+        if(target_list_length > 0)
+        {        
+            // Line from my position to first target
+            wb_emitter_set_channel(emitter_tag,0); 
+            buff[0] = BREAK; // draw new line
+            buff[1] = my_pos[0]; 
+            buff[2] = my_pos[1];
+            buff[3] = target[0][0];
+            buff[4] = target[0][1];
+            // Lines between targets
+            for(i=5;i<5*target_list_length-1;i=i+5)
+            {
+                buff[i] = BREAK;
+                buff[i+1] = buff[i-2]; 
+                buff[i+2] = buff[i-1];
+                buff[i+3] = target[k][0]; 
+                buff[i+4] = target[k][1];
+                k++;  
+            }
+            // send, reset channel        
+            if(target[0][2] == INVALID){ buff[0] = my_pos[0]; buff[1] = my_pos[1];}
+            wb_emitter_send(emitter_tag, &buff, (5*target_list_length)*sizeof(float));
+           // printf("Sent path from robot %d on channel %d\n", robot_id, wb_emitter_get_channel(emitter_tag));               
+            wb_emitter_set_channel(emitter_tag,robot_id+1);      
         }
-        // send, reset channel        
-        if(target[0][2] == INVALID){ buff[0] = my_pos[0]; buff[1] = my_pos[1];}
-        wb_emitter_send(emitter_tag, &buff, (5*target_list_length)*sizeof(float));
-        wb_emitter_set_channel(emitter_tag,robot_id+1);                     
-    }
 }
 
 
