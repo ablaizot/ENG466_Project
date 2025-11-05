@@ -5,7 +5,7 @@ sceneTreePerspectives: 000000ff000000010000000300000022000000c0000000fa010000000
 maximizedDockId: -1
 centralWidgetVisible: 1
 orthographicViewHeight: 1
-textFiles: 0 "controllers/epuck_crown/epuck_crown.c" "controllers/auct_super/auct_super.cc" "plugins/physics/physics.c" "plugins/physics/lab05_physics/lab05_physics.c"
+textFiles: 1 "controllers/epuck_crown/epuck_crown.c" "controllers/auct_super/auct_super.cc" "plugins/physics/physics.c" "plugins/physics/lab05_physics/lab05_physics.c"
 consoles: Console:All:All
 renderingDevicePerspectives: e-puck0:camera;1;1;0;0
 renderingDevicePerspectives: e-puck1:camera;1;1;0;0

@@ -1,4 +1,4 @@
-  /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
  * file:        auct_super.cc
  * author:      
  * description: Supervisor for market-based task allocation (DIS lab05)
@@ -47,7 +47,7 @@ using namespace std;
 #define NUM_ROBOTS 5                 // Change this also in the epuck_crown.c!
 #define NUM_ACTIVE_EVENTS 10          // number of active events
 #define TOTAL_EVENTS_TO_HANDLE  50   // Events after which simulation stops or...
-#define MAX_RUNTIME (3*60*1000)      // ...total runtime after which simulation stops
+#define MAX_RUNTIME (3*60*1000)      // ...total runtime after which simulation stops: 3 minutes
 //
 
 WbNodeRef g_event_nodes[MAX_EVENTS];
@@ -86,6 +86,8 @@ public:
   Point2d pos_;          //event pos
   WbNodeRef node_;       //event node ref
   uint16_t assigned_to_; //id of the robot that will handle this event
+  uint8_t task_type_;    //type of task 0 is type A, 1 is type B
+  uint16_t time_in_range_; //time the robot has been in range of the event
 
   // Auction data
   uint64_t t_announced_;        //time at which event was announced to robots
@@ -103,6 +105,32 @@ public:
   {
     node_ = g_event_nodes_free.back();  // Place node
     g_event_nodes_free.pop_back();
+    // Randomly assign task type 0 or 1 with 1/3 type 0 and 2/3 type 1
+    task_type_ = (rand() % 3 == 0) ? 0 : 1;
+    time_in_range_ = 0;
+    const double* color = nullptr;
+    WbFieldRef children_field = wb_supervisor_node_get_field(node_, "children");
+    if (children_field) {
+      color = wb_supervisor_field_get_mf_color(children_field, 0);
+    }
+    double c0 = 0.0, c1 = 0.0, c2 = 0.0;
+    if (color) {
+    if (task_type_ == 0) {
+      const double red_color[3] = {1, 0, 0};
+      if (children_field)
+        wb_supervisor_field_set_mf_color(children_field, 0, red_color); 
+    } else {
+     const double blue_color[3] = {0, 0, 1};
+      if (children_field)
+        wb_supervisor_field_set_mf_color(children_field, 0, blue_color); 
+    }
+      const double red_color[3] = {1, 0, 0};
+      wb_supervisor_field_set_mf_color(children_field, 0, red_color); 
+    } else {
+     const double blue_color[3] = {0, 0, 1};
+      wb_supervisor_field_set_mf_color(children_field, 0, blue_color); 
+    }
+
     
     double event_node_pos[3];           // Place event in arena
     event_node_pos[0] = pos_.x;
@@ -178,8 +206,11 @@ private:
     assert(num_active_events_ < NUM_ACTIVE_EVENTS); // check max. active events not reached
     num_active_events_++;
     t_next_event_ = clock_ + expovariate(EVENT_GENERATION_DELAY);
-    printf("New event %d at time %llu ms, total active events: %d\n",
-      next_event_id_-1, clock_, num_active_events_);
+    // print new event with event type 0 = type A, 1 = type B
+    printf("N event %d added at (%.2f, %.2f) of type %d\n", 
+      events_.back()->id_, events_.back()->pos_.x, events_.back()->pos_.y,
+      events_.back()->task_type_);
+    
   }
 
   // Init robot and get robot_ids and receivers
@@ -252,23 +283,44 @@ private:
   }
 
   // Marks one event as done, if one of the robots is within the range
+  // An even number robot takes 3 second to do a type A task, odd number robot takes 9 second to do type A task
+  // An even number robot takes 5 second to do a type B task, odd number robot takes 1 second to do type B task
   void markEventsDone(event_queue_t& event_queue) {
     for (auto& event : events_) {
-      if (!event->is_assigned() || event->is_done())
-        continue;
-      
-      const double *robot_pos = getRobotPos(event->assigned_to_);
-      Point2d robot_pos_pt(robot_pos[0], robot_pos[1]);
-      double dist = event->pos_.Distance(robot_pos_pt);
+        if (!event->is_assigned() || event->is_done())
+            continue;
+        
+        const double *robot_pos = getRobotPos(event->assigned_to_);
+        Point2d robot_pos_pt(robot_pos[0], robot_pos[1]);
+        double dist = event->pos_.Distance(robot_pos_pt);
 
-      if (dist <= EVENT_RANGE) {
-        printf("D robot %d reached event %d\n", event->assigned_to_,
-          event->id_);
-        num_events_handled_++;
-        event->markDone(clock_);
-        num_active_events_--;
-        event_queue.emplace_back(event.get(), MSG_EVENT_DONE);
-      }
+        if (dist <= EVENT_RANGE) {
+            // Get task completion time based on robot ID and task type
+            uint64_t completion_time;
+            bool is_even_robot = (event->assigned_to_ % 2 == 0);
+            
+            if (event->task_type_ == 0) { // Type A task
+                completion_time = is_even_robot ? 3000 : 9000; // 3 or 9 seconds in ms
+            } else { // Type B task
+                completion_time = is_even_robot ? 5000 : 1000; // 5 or 1 seconds in ms
+            }
+
+            // Increment time in range
+            event->time_in_range_ += STEP_SIZE;
+            
+            // Check if robot has been in range long enough
+            if (event->time_in_range_ >= completion_time) {
+                printf("D robot %d completed event %d after %u ms in range\n", 
+                    event->assigned_to_, event->id_, event->time_in_range_);
+                num_events_handled_++;
+                event->markDone(clock_);
+                num_active_events_--;
+                event_queue.emplace_back(event.get(), MSG_EVENT_DONE);
+            }
+        } else {
+            // Reset time in range if robot moves out of range
+            event->time_in_range_ = 0;
+        }
     }
   }
 
@@ -449,7 +501,7 @@ public:
     statTotalDistance();
 
     // Time to end the experiment?
-    if (num_events_handled_ >= TOTAL_EVENTS_TO_HANDLE ||(MAX_RUNTIME > 0 && clock_ >= MAX_RUNTIME)) {
+    if (MAX_RUNTIME > 0 && clock_ >= MAX_RUNTIME) {
       for(int i=0;i<NUM_ROBOTS;i++){
           buildMessage(i, NULL, MSG_QUIT, &msg);
           wb_emitter_set_channel(emitter_, i+1);
