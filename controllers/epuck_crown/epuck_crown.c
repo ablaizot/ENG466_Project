@@ -37,7 +37,7 @@ WbDeviceTag right_motor; //handler for the right wheel of the robot
 #define SPEED_UNIT_RADS     0.00628 // Conversion factor from speed unit to radian per second
 #define WHEEL_RADIUS        0.0205  // Wheel radius (meters)
 #define DELTA_T             TIME_STEP/1000   // Timestep (seconds)
-#define MAX_SPEED         800     // Maximum speed
+#define MAX_SPEED         500     // Maximum speed
 
 #define INVALID          -999
 #define BREAK            -999 //for physics plugin
@@ -48,7 +48,7 @@ WbDeviceTag right_motor; //handler for the right wheel of the robot
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /* Collective decision parameters */
 
-#define STATECHANGE_DIST 500   // minimum value of all sensor inputs combined to change to obstacle avoidance mode
+#define STATECHANGE_DIST 90   // minimum value of all sensor inputs combined to change to obstacle avoidance mode
 
 typedef enum {
     STAY            = 1,
@@ -63,7 +63,7 @@ typedef enum {
 /* e-Puck parameters */
 
 #define NB_SENSORS           8
-#define BIAS_SPEED           400
+#define BIAS_SPEED           300
 
 // Weights for the Braitenberg algorithm
 // NOTE: Weights from reynolds2.h
@@ -436,16 +436,37 @@ void reset(void)
 }
 
 
-void update_state(int _sum_distances)
+void update_state(int *distances)
 {
-    if (_sum_distances > STATECHANGE_DIST && state == GO_TO_GOAL)
+
+int obstacle_detected_now = 0;
+
+    if (target_valid && dist(my_pos[0], my_pos[1], target[0][0], target[0][1]) < 0.1)
     {
-        state = OBSTACLE_AVOID;
+    state = STAY;
+    return;
     }
+    
+
+    for(int i=0; i < NB_SENSORS; i++) 
+    {
+        distances[i] = wb_distance_sensor_get_value(ds[i]);
+        if (distances[i] > STATECHANGE_DIST) 
+        {
+            obstacle_detected_now = 1;
+        }
+    }
+    
+    if (obstacle_detected_now) 
+    {
+        state = OBSTACLE_AVOID;  
+    }
+    
     else if (target_valid)
     {
         state = GO_TO_GOAL;
     }
+    
     else
     {
         state = DEFAULT_STATE;
@@ -483,15 +504,15 @@ void update_self_motion(int msl, int msr) {
 
 
 // Compute wheel speed to avoid obstacles
-void compute_avoid_obstacle(int *msl, int *msr, int distances[]) 
+/*void compute_avoid_obstacle(int *msl, int *msr, int distances[]) 
 {
     int d1=0,d2=0;       // motor speed 1 and 2     
     int sensor_nb;       // FOR-loop counters    
 
     for(sensor_nb=0;sensor_nb<NB_SENSORS;sensor_nb++)
     {   
-       d1 += (distances[sensor_nb]-300) * Interconn[sensor_nb];
-       d2 += (distances[sensor_nb]-300) * Interconn[sensor_nb + NB_SENSORS];
+       d1 += (distances[sensor_nb]) * Interconn[sensor_nb];
+       d2 += (distances[sensor_nb]) * Interconn[sensor_nb + NB_SENSORS];
     }
     d1 /= 80; d2 /= 80;  // Normalizing speeds
 
@@ -499,6 +520,65 @@ void compute_avoid_obstacle(int *msl, int *msr, int distances[])
     *msl = d2+BIAS_SPEED; 
     limit(msl,MAX_SPEED);
     limit(msr,MAX_SPEED);
+}*/
+
+
+void compute_avoid_obstacle(int *msl, int *msr, int distances[])
+{
+    int th_obstacle = 80;
+    int th_free = 75;
+    int turn_speed = 300;
+    int forward_speed = 100;
+
+    int front = distances[0] + distances[7];
+    int back =  distances[3] + distances[4];
+    int left = distances[5] + distances[6];
+    int right = distances[1] + distances[2];
+    
+    
+    *msr = forward_speed;
+    *msl = forward_speed;
+    
+    if (front > 2*th_obstacle)
+    {
+        if (left < right)
+        {
+            *msr = turn_speed;
+            *msl = -turn_speed;
+        }
+        else
+        {
+            *msr = -turn_speed;
+            *msl = turn_speed;
+        }
+    }
+    else if (left + front > 4*th_obstacle && left < 2*th_free)
+    {
+        *msr = forward_speed - 20;
+        *msl = forward_speed + 20;   
+
+    }
+    else if (right + front > 4*th_obstacle && left < 2*th_free)
+    {
+        *msr = forward_speed + 20;
+        *msl = forward_speed - 20;   
+    }
+    
+    else if (left > 2*th_obstacle && right < 2*th_free)
+    {
+        *msr = forward_speed - 10;
+        *msl = forward_speed + 10;   
+
+    }
+    else if (right > 2*th_obstacle && left < 2*th_free)
+    {
+        *msr = forward_speed + 10;
+        *msl = forward_speed - 10;   
+    }
+    
+    limit(msl, MAX_SPEED);
+    limit(msr, MAX_SPEED);
+    
 }
 
 // Computes wheel speed to go towards a goal
@@ -522,10 +602,11 @@ void compute_go_to_goal(int *msl, int *msr)
     float w = Kw*range*sinf(bearing);
     
     // Convert to wheel speeds!
-    *msl = 50*(u - AXLE_LENGTH*w/2.0) / WHEEL_RADIUS;
-    *msr = 50*(u + AXLE_LENGTH*w/2.0) / WHEEL_RADIUS;
+    *msl = 20*(u - AXLE_LENGTH*w/2.0) / WHEEL_RADIUS;
+    *msr = 20*(u + AXLE_LENGTH*w/2.0) / WHEEL_RADIUS;
     limit(msl,MAX_SPEED);
     limit(msr,MAX_SPEED);
+   
 }
 
 // RUN e-puck
@@ -535,23 +616,23 @@ void run(int ms)
     // Motor speed and sensor variables	
     int msl=0,msr=0;                // motor speed left and right
     int distances[NB_SENSORS];  // array keeping the distance sensor readings
-    int sum_distances=0;        // sum of all distance sensor inputs, used as threshold for state change.  	
+    //int sum_distances=0;        // sum of all distance sensor inputs, used as threshold for state change.  	
 
     // Other variables
-    int sensor_nb;
+    //int sensor_nb;
 
     // Add the weighted sensors values
-    for(sensor_nb=0;sensor_nb<NB_SENSORS;sensor_nb++)
+    /*for(sensor_nb=0;sensor_nb<NB_SENSORS;sensor_nb++)
     {  
         distances[sensor_nb] = wb_distance_sensor_get_value(ds[sensor_nb]);
         sum_distances += distances[sensor_nb];
-    }
+    }*/
 
     // Get info from supervisor
     receive_updates();
 
     // State may change because of obstacles
-    update_state(sum_distances);
+    update_state(distances);
 
     // Set wheel speeds depending on state
     switch (state) {
