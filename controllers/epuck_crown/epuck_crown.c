@@ -20,6 +20,7 @@
 #include <webots/distance_sensor.h>
 #include <webots/radio.h>
 #include <webots/motor.h>
+#include <webots/led.h>
   
 #include <webots/supervisor.h> 
 
@@ -27,6 +28,7 @@
 #define MAX_SPEED_WEB      6.28    // Maximum speed webots
 WbDeviceTag left_motor; //handler for left wheel of the robot
 WbDeviceTag right_motor; //handler for the right wheel of the robot
+WbDeviceTag leds[10];
 
 
 #define DEBUG 1
@@ -288,6 +290,12 @@ void reset(void)
   //get motors
   left_motor = wb_robot_get_device("left wheel motor");
   right_motor = wb_robot_get_device("right wheel motor");
+  for (int i = 0; i < 10; i++) {
+    char ledname[16];
+    sprintf(ledname, "led%d", i);
+    leds[i] = wb_robot_get_device(ledname);
+  }
+
   wb_motor_set_position(left_motor, INFINITY);
   wb_motor_set_position(right_motor, INFINITY);
   
@@ -319,6 +327,11 @@ void reset(void)
     int tmp_id;
     if (sscanf(robot_name, "e-puck%d", &tmp_id)) {robot_id = (uint16_t)tmp_id;} 
     else {fprintf(stderr, "ERROR: couldn't parse my id %s \n", robot_name); exit(1);}
+
+    
+    for (int i = 0; i < 8; i++) {
+        wb_led_set(leds[i], robot_id%2 == 0);
+    } 
 
     // Am I used in this simulation?
     if (robot_id >= NUM_ROBOTS) {
