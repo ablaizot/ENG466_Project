@@ -47,6 +47,9 @@ WbDeviceTag leds[10];
 #define NUM_ROBOTS 5 // Change this also in the supervisor!
 
 
+#define MAX_TASKS 3
+
+
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /* Collective decision parameters */
 
@@ -234,16 +237,20 @@ static void receive_updates()
  ///*** END BEST TACTIC ***///
 
             ///*** END BEST TACTIC ***///
+
+            if (target_list_length >= MAX_TASKS)
+                d = 1.0/0.0;
+        
+            const bid_t my_bid = {robot_id, msg.event_id, d, indx};
                 
             // Send my bid to the supervisor
-            const bid_t my_bid = {robot_id, msg.event_id, d, indx};
             // print bid
-            printf("Robot %d bidding %.2f for event %d at index %d\n", robot_id, d, msg.event_id, indx);
+            //printf("Robot %d bidding %.2f for event %d at index %d\n", robot_id, d, msg.event_id, indx);
         
             wb_emitter_set_channel(emitter_tag, robot_id+1);
             wb_emitter_send(emitter_tag, &my_bid, sizeof(bid_t));
             // print emmitter channel
-            printf("Sent bid from robot %d on channel %d\n", robot_id, wb_emitter_get_channel(emitter_tag));            
+            //printf("Sent bid from robot %d on channel %d\n", robot_id, wb_emitter_get_channel(emitter_tag));            
         }
     }
     
@@ -330,7 +337,7 @@ void reset(void)
 
     
     for (int i = 0; i < 8; i++) {
-        wb_led_set(leds[i], robot_id%2 == 0);
+        wb_led_set(leds[i], robot_id%2);
     } 
 
     // Am I used in this simulation?

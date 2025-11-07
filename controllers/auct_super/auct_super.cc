@@ -118,10 +118,10 @@ public:
 
     if (task_type_ == 0) {
       const double red_color[3] = {1, 0, 0};
-      wb_supervisor_field_set_sf_color(color_field, red_color);
+      wb_supervisor_field_set_sf_color(color_field, red_color); // type A
     } else {
       const double blue_color[3] = {0, 0, 1};
-      wb_supervisor_field_set_sf_color(color_field, blue_color);
+      wb_supervisor_field_set_sf_color(color_field, blue_color); // type B
     }
 
     
@@ -276,8 +276,8 @@ private:
   }
 
   // Marks one event as done, if one of the robots is within the range
-  // An even number robot takes 3 second to do a type A task, odd number robot takes 9 second to do type A task
-  // An even number robot takes 5 second to do a type B task, odd number robot takes 1 second to do type B task
+  // An odd number robot takes 3 second to do a type A task, even number robot takes 9 second to do type A task
+  // An odd number robot takes 5 second to do a type B task, even number robot takes 1 second to do type B task
   void markEventsDone(event_queue_t& event_queue) {
     for (auto& event : events_) {
         if (!event->is_assigned() || event->is_done())
@@ -293,9 +293,9 @@ private:
             bool is_even_robot = (event->assigned_to_ % 2 == 0);
             
             if (event->task_type_ == 0) { // Type A task
-                completion_time = is_even_robot ? 3000 : 9000; // 3 or 9 seconds in ms
+                completion_time = is_even_robot ? 9000: 3000; // 3 or 9 seconds in ms
             } else { // Type B task
-                completion_time = is_even_robot ? 5000 : 1000; // 5 or 1 seconds in ms
+                completion_time = is_even_robot ? 1000: 5000; // 5 or 1 seconds in ms
             }
 
             // Increment time in range
@@ -432,7 +432,7 @@ public:
     for (int i=0;i<NUM_ROBOTS;i++) {
       // Check if we're receiving data
       if (wb_receiver_get_queue_length(receivers_[i]) > 0) {
-        printf("Receiving bid from robot %d\n", i);
+        //printf("Receiving bid from robot %d\n", i);
         assert(wb_receiver_get_queue_length(receivers_[i]) > 0);
         assert(wb_receiver_get_data_size(receivers_[i]) == sizeof(bid_t));
         
