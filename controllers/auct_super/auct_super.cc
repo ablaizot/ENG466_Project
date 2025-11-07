@@ -108,27 +108,20 @@ public:
     // Randomly assign task type 0 or 1 with 1/3 type 0 and 2/3 type 1
     task_type_ = (rand() % 3 == 0) ? 0 : 1;
     time_in_range_ = 0;
-    const double* color = nullptr;
     WbFieldRef children_field = wb_supervisor_node_get_field(node_, "children");
-    if (children_field) {
-      color = wb_supervisor_field_get_mf_color(children_field, 0);
-    }
-    double c0 = 0.0, c1 = 0.0, c2 = 0.0;
-    if (color) {
+    WbNodeRef child = wb_supervisor_field_get_mf_node(children_field, 0);
+    WbFieldRef appearance_field = wb_supervisor_node_get_field(child, "appearance");
+    WbNodeRef appearance_node = wb_supervisor_field_get_sf_node(appearance_field);
+    WbFieldRef mat_field = wb_supervisor_node_get_field(appearance_node, "material");
+    WbNodeRef mat_node = wb_supervisor_field_get_sf_node(mat_field);
+    WbFieldRef color_field = wb_supervisor_node_get_field(mat_node, "diffuseColor");
+
     if (task_type_ == 0) {
       const double red_color[3] = {1, 0, 0};
-      if (children_field)
-        wb_supervisor_field_set_mf_color(children_field, 0, red_color); 
+      wb_supervisor_field_set_sf_color(color_field, red_color);
     } else {
-     const double blue_color[3] = {0, 0, 1};
-      if (children_field)
-        wb_supervisor_field_set_mf_color(children_field, 0, blue_color); 
-    }
-      const double red_color[3] = {1, 0, 0};
-      wb_supervisor_field_set_mf_color(children_field, 0, red_color); 
-    } else {
-     const double blue_color[3] = {0, 0, 1};
-      wb_supervisor_field_set_mf_color(children_field, 0, blue_color); 
+      const double blue_color[3] = {0, 0, 1};
+      wb_supervisor_field_set_sf_color(color_field, blue_color);
     }
 
     
