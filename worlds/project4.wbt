@@ -10,10 +10,11 @@ WorldInfo {
     "Date: 26 SEP 2006"
   ]
   title "Lab08 Market"
+  basicTimeStep 64
 }
 Viewpoint {
-  orientation -0.605943522581291 -0.06582921297816308 0.7927792644617113 3.26280112980577
-  position 0.8978375946626922 -0.09822000753614829 3.0783395826509103
+  orientation -0.6135893951602219 -0.08467264884967528 0.7850723512413954 3.307460288256702
+  position 1.6987580023274262 -0.0479855487764778 6.039943295126787
 }
 Background {
   skyColor [
@@ -34,7 +35,7 @@ Robot {
   children [
     DEF sup_emitter Emitter {
       name "sup_emitter"
-      channel 2
+      channel 5
     }
     DEF rec1 Receiver {
       name "rec1"
@@ -91,99 +92,56 @@ Robot {
   supervisor TRUE
 }
 DEF e-puck0 E-puck {
-  hidden position_0_0 31.16778574966841
-  hidden position_0_1 21.56160282910394
-  hidden linearVelocity_0 -2.0980951471337207e-05 -1.8703439124490602e-05 1.75158653574463e-08
-  hidden angularVelocity_0 0.0012468557552250878 -0.001398685017824031 -5.087498037499735e-10
-  hidden rotation_1 0 0.9999999999999999 0 6.0350445209500645
-  hidden linearVelocity_1 -2.79740602177992e-05 -2.493743589959208e-05 2.0855044318590017e-11
-  hidden angularVelocity_1 0.00124685576616813 -0.0013986850301319362 -7.299699916257787e-10
-  hidden rotation_2 0 -1 0 3.571138399614406
-  hidden linearVelocity_2 -2.7974055939697807e-05 -2.4937432074513573e-05 2.265839581441807e-11
-  hidden angularVelocity_2 0.0012468557683674875 -0.001398685033716319 -2.8753114704845775e-10
   translation -0.36923021011651674 0.6975375576210103 -6.409085575649794e-05
   rotation 0.0006691288152868299 -0.0017932553691855152 0.999998168249227 0.7280602939650604
   name "e-puck0"
   controller "epuck_crown"
+  supervisor TRUE
+  emitter_channel 0
 }
 DEF e-puck1 E-puck {
-  hidden position_0_0 57.983124729271495
-  hidden position_0_1 64.51767890489778
-  hidden linearVelocity_0 -4.517211799927312e-16 1.1895235592247292e-14 -1.1842378929335004e-15
-  hidden angularVelocity_0 1.464286395338109e-14 -2.2815418592911635e-13 2.2170745739134758e-13
-  hidden rotation_1 0 -1 0 4.84872834252437
-  hidden linearVelocity_1 -3.2688271914919727e-15 1.764981477055149e-14 1.875997471799322e-15
-  hidden angularVelocity_1 -8.426290230057415e-13 -2.812000813341021e-13 2.2179012012002672e-13
-  hidden rotation_2 0 1 0 1.6858258331019136
-  hidden linearVelocity_2 -5.931473988526879e-16 7.391708078955655e-15 -1.3008852297081629e-15
-  hidden angularVelocity_2 -4.0823765369074423e-13 1.56794594547073e-13 2.218791373086841e-13
   translation -0.6113254448467565 -0.5370531096337272 -7.018217799758565e-05
   rotation -8.412693469233174e-06 -9.549251675248533e-06 -0.9999999999190192 1.4653069302597486
   name "e-puck1"
   controller "epuck_crown"
+  supervisor TRUE
   emitter_channel 0
   receiver_channel 2
 }
 DEF e-puck2 E-puck {
-  hidden position_0_0 75.12529659077015
-  hidden position_0_1 92.57197512974963
-  hidden linearVelocity_0 -0.010330580477634382 0.04875728302945869 1.596351907130767e-05
-  hidden angularVelocity_0 6.661107335238499e-05 -0.00030159139514316383 1.6344444397344704
-  hidden rotation_1 0 -1 0 0.2729270953848906
-  hidden linearVelocity_1 -0.0013931522271401595 0.007231797240832555 -8.541295286284853e-06
-  hidden angularVelocity_1 -0.16027982107858385 -0.031179170800362085 1.6325861534340451
-  hidden rotation_2 0 0.9999999999999999 0 4.607380829235421
-  hidden linearVelocity_2 -0.019113227069644943 0.09033995385632024 -3.405175435649266e-05
-  hidden angularVelocity_2 -4.706844863936687 -0.9934924840625308 1.6632786037768046
   translation 0.8545568530251683 -0.49174308410102735 -9.415933186906686e-05
   rotation 0.0004747505600848836 0.000611390121222392 0.9999997004069677 1.8243634140881906
   name "e-puck2"
   controller "epuck_crown"
+  supervisor TRUE
   emitter_channel 0
   receiver_channel 3
 }
 DEF e-puck3 E-puck {
-  hidden position_0_0 74.52609946851328
-  hidden position_0_1 89.81036286947177
-  hidden linearVelocity_0 0.00019854073762613723 -9.029594151744403e-05 6.689664350336526e-05
-  hidden angularVelocity_0 -0.0028379384134777593 0.003913670540734894 0.00622179482629325
-  hidden rotation_1 0 -1 0 0.8721242176417575
-  hidden linearVelocity_1 0.0003641895669715741 9.85505299370135e-06 -3.986817485857138e-05
-  hidden angularVelocity_1 -0.0008202272790387716 0.013090897983684081 -0.0036507594718701436
-  hidden rotation_2 0 1 0 1.8457685689575636
-  hidden linearVelocity_2 0.0001221087727149565 5.513834533637517e-05 -7.480545878779583e-06
-  hidden angularVelocity_2 -0.002285044027477031 0.006431495568185104 0.004801698919067562
   translation 0.5363893655552989 0.3336770561838342 -7.282393710116887e-05
   rotation 0.0007404216614904846 -0.000398508813033931 -0.9999996464831821 -1.355117099775451
   name "e-puck3"
   controller "epuck_crown"
-  emitter_channel 4
+  supervisor TRUE
+  emitter_channel 0
   receiver_channel 4
 }
 DEF e-puck4 E-puck {
-  hidden position_0_0 78.02505125118165
-  hidden position_0_1 80.17144225510002
-  hidden linearVelocity_0 -0.05131766577294338 -0.019696536329073054 -1.1339304227437942e-05
-  hidden angularVelocity_0 -0.0012872884967040467 -0.00027055343943942125 1.2039957728473356
-  hidden rotation_1 0 1 0 2.626827565026613
-  hidden linearVelocity_1 -0.02216612000276711 -0.008293391368276273 -4.113139753101827e-06
-  hidden angularVelocity_1 0.380566348113266 -0.9972679842657849 1.2049955971378201
-  hidden rotation_2 0 1 0 4.773218568944981
-  hidden linearVelocity_2 -0.0806767942745784 -0.030994893439715572 2.6897825837388705e-05
-  hidden angularVelocity_2 1.5996793425282019 -4.168573673133801 1.2338062294014196
   translation 0.24763423451522149 -0.08636116211272075 -0.00011165164304883547
   rotation -8.278045819075025e-05 0.00036782861379336125 0.9999999289247509 -2.7437364185200788
   name "e-puck4"
   controller "epuck_crown"
+  supervisor TRUE
   emitter_channel 0
   receiver_channel 5
 }
 DEF e0 Pose {
-  translation 0 0 -0.13999999999999999
+  translation 0 0 -0.2
   children [
     Shape {
       appearance Appearance {
         material Material {
+          diffuseColor 0 0 1
         }
       }
       geometry Cylinder {
@@ -194,11 +152,12 @@ DEF e0 Pose {
   ]
 }
 DEF e1 Pose {
-  translation 0 0 -0.13999999999999999
+  translation 0 0 -0.2
   children [
     Shape {
       appearance Appearance {
         material Material {
+          diffuseColor 0 0 1
         }
       }
       geometry Cylinder {
@@ -209,11 +168,12 @@ DEF e1 Pose {
   ]
 }
 DEF e2 Pose {
-  translation 0 0 -0.13999999999999999
+  translation 0 0 -0.2
   children [
     Shape {
       appearance Appearance {
         material Material {
+          diffuseColor 1 0 0
         }
       }
       geometry Cylinder {
@@ -224,11 +184,12 @@ DEF e2 Pose {
   ]
 }
 DEF e3 Pose {
-  translation 0 0 -0.13999999999999999
+  translation 0 0 -0.2
   children [
     Shape {
       appearance Appearance {
         material Material {
+          diffuseColor 0 0 1
         }
       }
       geometry Cylinder {
@@ -239,11 +200,12 @@ DEF e3 Pose {
   ]
 }
 DEF e4 Pose {
-  translation 0 0 -0.13999999999999999
+  translation 0 0 -0.2
   children [
     Shape {
       appearance Appearance {
         material Material {
+          diffuseColor 0 0 1
         }
       }
       geometry Cylinder {
@@ -254,12 +216,12 @@ DEF e4 Pose {
   ]
 }
 DEF e5 Pose {
-  translation 0.4261040270328522 -0.7836985312402248 0.01
+  translation 0 0 -0.2
   children [
     Shape {
       appearance Appearance {
         material Material {
-          diffuseColor 1 0 0.8
+          diffuseColor 1 0 0
         }
       }
       geometry Cylinder {
@@ -270,12 +232,12 @@ DEF e5 Pose {
   ]
 }
 DEF e6 Pose {
-  translation 0.647085440158844 -0.2847941249608993 0.01
+  translation 0 0 -0.2
   children [
     Shape {
       appearance Appearance {
         material Material {
-          diffuseColor 1 0 0.8
+          diffuseColor 1 0 0
         }
       }
       geometry Cylinder {
@@ -286,12 +248,12 @@ DEF e6 Pose {
   ]
 }
 DEF e7 Pose {
-  translation 0.0156269788742065 -0.27197945415973657 0.01
+  translation 0 0 -0.2
   children [
     Shape {
       appearance Appearance {
         material Material {
-          diffuseColor 1 0 0.8
+          diffuseColor 0 0 1
         }
       }
       geometry Cylinder {
@@ -302,12 +264,12 @@ DEF e7 Pose {
   ]
 }
 DEF e8 Pose {
-  translation -0.37472915053367617 -0.5334345534443855 0.01
+  translation 0 0 -0.2
   children [
     Shape {
       appearance Appearance {
         material Material {
-          diffuseColor 1 0 0.8
+          diffuseColor 0 0 1
         }
       }
       geometry Cylinder {
@@ -318,12 +280,12 @@ DEF e8 Pose {
   ]
 }
 DEF e9 Pose {
-  translation 0.18616136312484732 -0.3066545456647872 0.01
+  translation 0 0 -0.2
   children [
     Shape {
       appearance Appearance {
         material Material {
-          diffuseColor 1 0 0.8
+          diffuseColor 0 0 1
         }
       }
       geometry Cylinder {
@@ -333,7 +295,6 @@ DEF e9 Pose {
     }
   ]
 }
-
 RectangleArena {
   rotation 0 0 1 1.5707963267948966
   floorSize 1.25 1.25
@@ -370,4 +331,15 @@ Solid {
     }
   ]
   name "wall1"
+}
+Solid {
+  translation 0 -0.75 0
+  children [
+    Shape {
+      geometry Plane {
+        size 1.25 0.25
+      }
+    }
+  ]
+  name "Trash"
 }

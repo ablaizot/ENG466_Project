@@ -39,6 +39,7 @@ using namespace std;
 
 #define EVENT_RANGE (0.1)      // distance within which a robot must come to do event
 #define EVENT_TIMEOUT (10000)   // ticks until an event auction runs out
+#define WAITING_TIMEOUT (10000)   // ticks until an event auction runs out
 #define EVENT_GENERATION_DELAY (1000) // average time between events ms (expo distribution)
 
 #define GPS_INTERVAL (500)
@@ -95,13 +96,14 @@ public:
   uint16_t best_bidder_;        //id of the robot that had the best bid so far
   double best_bid_;             //value of the best bid (lower is better)
   uint64_t t_done_;             //time at which the assigned robot reached the event
+  uint64_t t_waiting_;             //time at which the event was set to wait
   int bidder_index;             //index at which the bidder will put event in tasklist
 
 // Public functions
 public:
   //Event creation
   Event(uint16_t id) : id_(id), pos_(rand_coord(), rand_coord()),
-    assigned_to_(-1), t_announced_(-1), best_bidder_(-1), best_bid_(0.0), t_done_(-1)
+    assigned_to_(-1), t_announced_(-1), best_bidder_(-1), best_bid_(0.0), t_done_(-1), t_waiting_(-1)
   {
     node_ = g_event_nodes_free.back();  // Place node
     g_event_nodes_free.pop_back();
@@ -138,17 +140,7 @@ public:
   bool was_announced() const { return t_announced_ != (uint64_t) -1; }
   bool has_bids() const { return best_bidder_ != (uint16_t) -1; }
   bool is_done() const { return t_done_ != (uint64_t) -1; }
-
-  // Check if event can be assigned
-  void updateAuction(uint16_t bidder, double bid, int index) {
-    if (bid >= 0.0 && (!has_bids() || bid < best_bid_)) {
-      best_bidder_ = bidder;
-      best_bid_ = bid;
-      bidder_index = index;  
-    }
-    bids_in_.set(bidder);
-    if (bids_in_.all()) assigned_to_ = best_bidder_;
-  }
+  bool is_waiting() const { return t_waiting_ != (uint64_t) -1; }
 
   void restartAuction() {
     assigned_to_ = -1;
@@ -157,6 +149,30 @@ public:
     best_bidder_ = -1;
     best_bid_ = 0.0;
     t_done_ = -1;
+    t_waiting_ = -1;
+  }
+
+    // Check if event can be assigned
+  void updateAuction(uint16_t bidder, double bid, int index, uint64_t clk) {
+    if (bid <= 0) {
+      restartAuction();
+      return;
+    }
+    if (bid >= 0.0 && (!has_bids() || bid < best_bid_)) {
+      best_bidder_ = bidder;
+      best_bid_ = bid;
+      bidder_index = index;  
+    }
+    bids_in_.set(bidder);
+    if (bids_in_.all()) {
+      if (!isinf(best_bid_)) {
+        assigned_to_ = best_bidder_;
+      } else {
+        restartAuction();
+        t_waiting_ = clk;
+        printf("No valid bids for event %d, set to wait\n", id_); 
+      }
+    }
   }
 
   void markDone(uint64_t clk) {
@@ -309,6 +325,7 @@ private:
                 event->markDone(clock_);
                 num_active_events_--;
                 event_queue.emplace_back(event.get(), MSG_EVENT_DONE);
+                restartWaitingEvents(event_queue);
             }
         } else {
             // Reset time in range if robot moves out of range
@@ -322,18 +339,21 @@ private:
     for (auto& event : events_) {
       if (event->is_assigned()) continue;
 
+      if (event->is_waiting() && clock_ - event->t_waiting_ <= WAITING_TIMEOUT) continue; // announce again if waiting too long
+
       // Send announce, if new
       // IMPL DETAIL: Only allow one auction at a time.
-      if (!event->was_announced() && !auction) {
+      if ((!event->was_announced()) && !auction) {
         event->t_announced_ = clock_;
+        event->t_waiting_ = -1;
         event_queue.emplace_back(event.get(), MSG_EVENT_NEW); 
         auction = event.get();
         printf("A event %d announced\n", event->id_);
 
       // End early or restart, if timed out
-      } else if (clock_ - event->t_announced_ > EVENT_TIMEOUT) {
+      } else if (clock_ - event->t_announced_ > EVENT_TIMEOUT && event->was_announced()) {
         // End early if we have any bids at all
-        if (event->has_bids()) {
+        if (event->has_bids() && !isinf(event->best_bid_)) {
           // IMPLEMENTATION DETAIL: If about to time out, assign to
           // the highest bidder or restart the auction if there is none.
           event->assigned_to_ = event->best_bidder_;
@@ -346,9 +366,49 @@ private:
         } else {
           // (reannounced in next iteration)
           event->restartAuction();
+          event->t_waiting_ = clock_;
+          printf("Auction for event %d failed, set to wait\n", event->id_);
           if (auction == event.get())
             auction = NULL;
         }
+      }
+    }
+  }
+
+  void restartWaitingEvents(event_queue_t& event_queue) {
+    // For each waiting event
+    for (auto& event : events_) {
+      if (event->is_assigned() || event->is_done() || event->was_announced()) continue;
+
+      if (event->is_waiting())
+        event->t_waiting_ = -1;
+    }
+  }
+
+  void handleRobotBiddings(event_queue_t& event_queue) {
+    // Send and receive messages
+    bid_t* pbid; // inbound
+    for (int i=0;i<NUM_ROBOTS;i++) {
+      // Check if we're receiving data
+      if (wb_receiver_get_queue_length(receivers_[i]) > 0) {
+        //printf("Receiving bid from robot %d\n", i);
+        assert(wb_receiver_get_queue_length(receivers_[i]) > 0);
+        assert(wb_receiver_get_data_size(receivers_[i]) == sizeof(bid_t));
+        
+        pbid = (bid_t*) wb_receiver_get_data(receivers_[i]); 
+        assert(pbid->robot_id == i);
+        printf("B robot %d bid %.2f for event %d\n", pbid->robot_id,
+          pbid->value, pbid->event_id);
+        Event* event = events_.at(pbid->event_id).get();
+        event->updateAuction(pbid->robot_id, pbid->value, pbid->event_index, clock_);
+        // TODO: Refactor this (same code above in handleAuctionEvents)
+        if (event->is_assigned()) {
+          event_queue.emplace_back(event, MSG_EVENT_WON);
+          auction = NULL;
+          printf("W robot %d won event %d\n", event->assigned_to_, event->id_);
+        }
+
+        wb_receiver_next_packet(receivers_[i]);
       }
     }
   }
@@ -418,6 +478,7 @@ public:
     // Events that will be announced next or that have just been assigned/done
     event_queue_t event_queue;
 
+    // Check if events are done or not
     markEventsDone(event_queue);
 
     // ** Add a random new event, if the time has come
@@ -425,33 +486,11 @@ public:
       addEvent();
     }
 
+    // Check if there are any new events to announce
     handleAuctionEvents(event_queue);
  
-    // Send and receive messages
-    bid_t* pbid; // inbound
-    for (int i=0;i<NUM_ROBOTS;i++) {
-      // Check if we're receiving data
-      if (wb_receiver_get_queue_length(receivers_[i]) > 0) {
-        //printf("Receiving bid from robot %d\n", i);
-        assert(wb_receiver_get_queue_length(receivers_[i]) > 0);
-        assert(wb_receiver_get_data_size(receivers_[i]) == sizeof(bid_t));
-        
-        pbid = (bid_t*) wb_receiver_get_data(receivers_[i]); 
-        assert(pbid->robot_id == i);
-        printf("B robot %d bid %.2f for event %d\n", pbid->robot_id,
-          pbid->value, pbid->event_id);
-        Event* event = events_.at(pbid->event_id).get();
-        event->updateAuction(pbid->robot_id, pbid->value, pbid->event_index);
-        // TODO: Refactor this (same code above in handleAuctionEvents)
-        if (event->is_assigned()) {
-          event_queue.emplace_back(event, MSG_EVENT_WON);
-          auction = NULL;
-          printf("W robot %d won event %d\n", event->assigned_to_, event->id_);
-        }
-
-        wb_receiver_next_packet(receivers_[i]);
-      }
-    }
+    // Check if robots sent any bids for events and process them
+    handleRobotBiddings(event_queue);
 
     // outbound
     message_t msg;
@@ -478,7 +517,9 @@ public:
       for (const auto& e_es_tuple : event_queue) {
         const Event* event = e_es_tuple.first;
         const message_event_state_t event_state = e_es_tuple.second;
-        if (event->is_assigned() && event->assigned_to_ != i) continue;
+
+        // Robot might accidentaly complete task of other robot -> send event done to everyone
+        if (event->is_assigned() && event->assigned_to_ != i && !event->is_done()) continue; 
 
         buildMessage(i, event, event_state, &msg);
         while (wb_emitter_get_channel(emitter_) != i+1)

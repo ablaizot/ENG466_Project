@@ -38,7 +38,7 @@ WbDeviceTag leds[10];
 #define AXLE_LENGTH         0.052   // Distance between wheels of robot (meters)
 #define SPEED_UNIT_RADS     0.00628 // Conversion factor from speed unit to radian per second
 #define WHEEL_RADIUS        0.0205  // Wheel radius (meters)
-#define DELTA_T             TIME_STEP/1000   // Timestep (seconds)
+#define DELTA_T             (TIME_STEP/1000.0)   // Timestep (seconds)
 #define MAX_SPEED         800     // Maximum speed
 
 #define INVALID          -999
@@ -46,7 +46,8 @@ WbDeviceTag leds[10];
 
 #define NUM_ROBOTS 5 // Change this also in the supervisor!
 
-
+#define MAX_WORK_TIME 120 // 120s of maximum work time
+#define EVENT_RANGE (0.1)
 #define MAX_TASKS 3
 
 
@@ -60,6 +61,8 @@ typedef enum {
     GO_TO_GOAL      = 2,                    // Initial state aliases
     OBSTACLE_AVOID  = 3,
     RANDOM_WALK     = 4,
+    DOING_TASK      = 5,
+    DISABLED        = 6,
 } robot_state_t;
 
 #define DEFAULT_STATE (STAY)
@@ -81,13 +84,14 @@ uint16_t robot_id;          // Unique robot ID
 robot_state_t state;                 // State of the robot
 double my_pos[3];           // X, Z, Theta of this robot
 char target_valid;          // boolean; whether we are supposed to go to the target
-double target[99][3];       // x and z coordinates of target position (max 99 targets)
+double target[10][3];       // x and z coordinates of target position (max 10 targets)
 int lmsg, rmsg;             // Communication variables
 int indx;                   // Event index to be sent to the supervisor
 
 float buff[99];             // Buffer for physics plugin
 
 double stat_max_velocity;
+float worked_time = 0;
 
 
 // Proximity and radio handles
@@ -146,7 +150,7 @@ static void receive_updates()
 
         //find target list length
         i = 0;
-        while(target[i][2] != INVALID){ i++;}
+        while(round(target[i][2]) != INVALID){ i++;}
         target_list_length = i;  
         
         if(target_list_length == 0) target_valid = 0;   
@@ -173,7 +177,7 @@ static void receive_updates()
             // If event is done, delete it from array 
             for(i=0; i<=target_list_length; i++)
             {
-                if((int)target[i][2] == msg.event_id) 
+                if((int)round(target[i][2]) == msg.event_id) 
                 { //look for correct id (in case wrong event was done first)
                     for(; i<=target_list_length; i++)
                     { //push list to the left from event index
@@ -181,6 +185,7 @@ static void receive_updates()
                         target[i][1] = target[i+1][1];
                         target[i][2] = target[i+1][2];
                     }
+                    target[target_list_length+1][2] = INVALID;
                 }
             }
             // adjust target list length
@@ -238,7 +243,7 @@ static void receive_updates()
 
             ///*** END BEST TACTIC ***///
 
-            if (target_list_length >= MAX_TASKS)
+            if (target_list_length >= MAX_TASKS || state == DISABLED)
                 d = 1.0/0.0;
         
             const bid_t my_bid = {robot_id, msg.event_id, d, indx};
@@ -257,7 +262,7 @@ static void receive_updates()
     
     // Communication with physics plugin (channel 0)            
         i = 0; k = 1;
-        while((int)target[i][2] != INVALID){i++;}
+        while((int)round(target[i][2]) != INVALID){i++;}
         target_list_length = i; 
         if(target_list_length > 0)
         {        
@@ -279,7 +284,7 @@ static void receive_updates()
                 k++;  
             }
             // send, reset channel        
-            if(target[0][2] == INVALID){ buff[0] = my_pos[0]; buff[1] = my_pos[1];}
+            if(round(target[0][2]) == INVALID){ buff[0] = my_pos[0]; buff[1] = my_pos[1];}
             wb_emitter_send(emitter_tag, &buff, (5*target_list_length)*sizeof(float));
            // printf("Sent path from robot %d on channel %d\n", robot_id, wb_emitter_get_channel(emitter_tag));               
             wb_emitter_set_channel(emitter_tag,robot_id+1);      
@@ -319,7 +324,7 @@ void reset(void)
     indx = 0;
     
     // Init target positions to "INVALID"
-    for(i=0;i<99;i++){ 
+    for(i=0;i<10;i++){ 
         target[i][0] = 0;
         target[i][1] = 0;
         target[i][2] = INVALID; 
@@ -366,16 +371,44 @@ void reset(void)
 
 void update_state(int _sum_distances)
 {
-    if (_sum_distances > STATECHANGE_DIST && state == GO_TO_GOAL)
-    {
+    // compute distance to goal
+    float a = target[0][0] - my_pos[0];
+    float b = target[0][1] - my_pos[1];
+    float dist = sqrt(a*a + b*b);
+    
+    
+    wb_led_set(leds[8], 0);
+
+    if (state == DISABLED)
+        return;
+
+    if (worked_time >= MAX_WORK_TIME) {
+        WbNodeRef self = wb_supervisor_node_get_self();
+        WbFieldRef translation = wb_supervisor_node_get_field(self, "translation");
+        const double new_pos[3] = { 0.5-0.25*robot_id, -0.75, 0 };
+        wb_supervisor_field_set_sf_vec3f(translation, new_pos);
+        printf("Disabled robot %d\n",robot_id);
+        state = DISABLED;
+        for (int i=0; i<10; i++) { // unbid for all event -> send -1 as bid
+            if (round(target[i][2]) == INVALID)
+                continue;
+            
+            const bid_t my_bid = {robot_id, round(target[i][2]), -1, i};
+            printf("Robot %d abandonning event %1.0f :(\n", robot_id, target[i][2]);
+            wb_emitter_set_channel(emitter_tag, robot_id+1);
+            wb_emitter_send(emitter_tag, &my_bid, sizeof(bid_t));
+        }
+        return;
+    }
+
+    if (_sum_distances > STATECHANGE_DIST && state == GO_TO_GOAL) {
         state = OBSTACLE_AVOID;
-    }
-    else if (target_valid)
-    {
+    } else if (target_valid && dist >= EVENT_RANGE) {
         state = GO_TO_GOAL;
-    }
-    else
-    {
+    } else if (target_valid) {
+        state = DOING_TASK;
+        wb_led_set(leds[8], 1);
+    } else {
         state = DEFAULT_STATE;
     }
 }
@@ -488,6 +521,16 @@ void run(int ms)
             msr = 0;
             break;
 
+        case DOING_TASK:
+            msl = 0;
+            msr = 0;
+            break;
+
+        case DISABLED:
+            msl = 0;
+            msr = 0;
+            break;
+
         case GO_TO_GOAL:
             compute_go_to_goal(&msl, &msr);
             break;
@@ -510,6 +553,11 @@ void run(int ms)
     wb_motor_set_velocity(left_motor, msl_w);
     wb_motor_set_velocity(right_motor, msr_w);
     update_self_motion(msl, msr);
+
+    if (state != STAY && state != DISABLED) {
+        worked_time += DELTA_T;
+        //printf("Worked for %0.2f \n", worked_time);
+    }
 
     // Update clock
     clock += ms;
