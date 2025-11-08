@@ -45,10 +45,14 @@ WbDeviceTag leds[10];
 #define BREAK            -999 //for physics plugin
 
 #define NUM_ROBOTS 5 // Change this also in the supervisor!
-
-#define MAX_WORK_TIME 120 // 120s of maximum work time
 #define EVENT_RANGE (0.1)
+
+#define MAX_WORK_TIME (120.0*1000) // 120s of maximum work time
+#define MAX_SIMULATION_TIME (180.0*1000) // 180s of simulation time
 #define MAX_TASKS 3
+#define RATE_OF_MOVEMENT 2.0 // how much time required to travel 1 unit of distance (2 seconds per meter travelled)
+
+#define AVG_TASK_PER_SECOND (20.0/(MAX_SIMULATION_TIME*NUM_ROBOTS)*1000)
 
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
@@ -91,7 +95,7 @@ int indx;                   // Event index to be sent to the supervisor
 float buff[99];             // Buffer for physics plugin
 
 double stat_max_velocity;
-float worked_time = 0;
+int worked_time = 0;
 
 
 // Proximity and radio handles
@@ -117,6 +121,16 @@ void limit(int *number, int limit) {
 
 double dist(double x0, double y0, double x1, double y1) {
     return sqrt((x0-x1)*(x0-x1) + (y0-y1)*(y0-y1));
+}
+
+
+// calculate the value of waiting and not working for a time
+double calculate_time_value(float time) {
+    float work_time_remain = MAX_WORK_TIME - worked_time;
+    float simulation_time_remain = MAX_SIMULATION_TIME - clock;
+    float time_factor = (simulation_time_remain - work_time_remain) / (MAX_SIMULATION_TIME - MAX_WORK_TIME);
+    //printf("Waiting evaluation: factor %0.2f, time %0.2f, total %f\n", time_factor, time, AVG_TASK_PER_SECOND * time * time_factor);
+    return AVG_TASK_PER_SECOND * time * time_factor;
 }
 
 // Check if we received a message and extract information
@@ -214,6 +228,14 @@ static void receive_updates()
 
             indx = 0;
             double d = dist(my_pos[0], my_pos[1], msg.event_x, msg.event_y);
+
+            uint64_t completion_time;
+            if (msg.event_type == 0) {     // Type A task
+                completion_time = (robot_id % 2 == 0) ? 9: 3; // 3 or 9 seconds
+            } else {                        // Type B task
+                completion_time = (robot_id % 2 == 0) ? 1: 5; // 5 or 1 seconds
+            }
+
             if (target_list_length > 0) {
                 for (i = 0; i < target_list_length; i++) {
                     if (i == 0) {
@@ -238,15 +260,18 @@ static void receive_updates()
                     }
                 }
             }
-        
- ///*** END BEST TACTIC ***///
 
-            ///*** END BEST TACTIC ***///
+            double task_time = RATE_OF_MOVEMENT * d + completion_time;
 
+            // don't bid if waiting is better
+            if (calculate_time_value(task_time) > 1)
+                task_time = 1.0/0.0;
+
+            // don't bid if DISABLED or has already maximum tasks planned
             if (target_list_length >= MAX_TASKS || state == DISABLED)
-                d = 1.0/0.0;
+                task_time = 1.0/0.0;
         
-            const bid_t my_bid = {robot_id, msg.event_id, d, indx};
+            const bid_t my_bid = {robot_id, msg.event_id, task_time, indx};
                 
             // Send my bid to the supervisor
             // print bid
@@ -372,10 +397,9 @@ void reset(void)
 void update_state(int _sum_distances)
 {
     // compute distance to goal
-    float a = target[0][0] - my_pos[0];
+    float a = target[0][1] - my_pos[0];
     float b = target[0][1] - my_pos[1];
-    float dist = sqrt(a*a + b*b);
-    
+    float task_dist = sqrt(a*a + b*b);
     
     wb_led_set(leds[8], 0);
 
@@ -403,7 +427,7 @@ void update_state(int _sum_distances)
 
     if (_sum_distances > STATECHANGE_DIST && state == GO_TO_GOAL) {
         state = OBSTACLE_AVOID;
-    } else if (target_valid && dist >= EVENT_RANGE) {
+    } else if (target_valid && task_dist >= EVENT_RANGE) {
         state = GO_TO_GOAL;
     } else if (target_valid) {
         state = DOING_TASK;
@@ -555,7 +579,7 @@ void run(int ms)
     update_self_motion(msl, msr);
 
     if (state != STAY && state != DISABLED) {
-        worked_time += DELTA_T;
+        worked_time += ms;
         //printf("Worked for %0.2f \n", worked_time);
     }
 

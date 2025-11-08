@@ -130,10 +130,11 @@ public:
     double event_node_pos[3];           // Place event in arena
     event_node_pos[0] = pos_.x;
     event_node_pos[1] = pos_.y;
-    event_node_pos[2] = .01;
+    event_node_pos[2] = .03;
     wb_supervisor_field_set_sf_vec3f(
       wb_supervisor_node_get_field(node_,"translation"),
       event_node_pos);
+    //printf("New event position %0.2f, %0.2f", pos_.x, pos_.y);
   }
 
   bool is_assigned() const { return assigned_to_ != (uint16_t) -1; }
@@ -153,10 +154,10 @@ public:
   }
 
     // Check if event can be assigned
-  void updateAuction(uint16_t bidder, double bid, int index, uint64_t clk) {
+  bool updateAuction(uint16_t bidder, double bid, int index, uint64_t clk) {
     if (bid <= 0) {
       restartAuction();
-      return;
+      return true; 
     }
     if (bid >= 0.0 && (!has_bids() || bid < best_bid_)) {
       best_bidder_ = bidder;
@@ -171,8 +172,10 @@ public:
         restartAuction();
         t_waiting_ = clk;
         printf("No valid bids for event %d, set to wait\n", id_); 
+        return true;
       }
     }
+    return false;
   }
 
   void markDone(uint64_t clk) {
@@ -267,6 +270,7 @@ private:
     msg->event_id = -1;
     msg->event_x = 0.0;
     msg->event_y = 0.0;
+    msg->event_type = -1;
 
     if (event) {
       assert(event_state != MSG_EVENT_INVALID && 
@@ -275,6 +279,7 @@ private:
       msg->event_x = event->pos_.x;
       msg->event_y = event->pos_.y;
       msg->event_index = event->bidder_index;
+      msg->event_type = event->task_type_;
     }
   }
 
@@ -400,7 +405,11 @@ private:
         printf("B robot %d bid %.2f for event %d\n", pbid->robot_id,
           pbid->value, pbid->event_id);
         Event* event = events_.at(pbid->event_id).get();
-        event->updateAuction(pbid->robot_id, pbid->value, pbid->event_index, clock_);
+        bool auction_failed = event->updateAuction(pbid->robot_id, pbid->value, pbid->event_index, clock_);
+
+        if (auction_failed && auction == event)
+            auction = NULL;
+
         // TODO: Refactor this (same code above in handleAuctionEvents)
         if (event->is_assigned()) {
           event_queue.emplace_back(event, MSG_EVENT_WON);
