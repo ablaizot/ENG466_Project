@@ -13,8 +13,8 @@ WorldInfo {
   basicTimeStep 64
 }
 Viewpoint {
-  orientation -0.6135893951602219 -0.08467264884967528 0.7850723512413954 3.307460288256702
-  position 1.6987580023274262 -0.0479855487764778 6.039943295126787
+  orientation -0.6557161227352512 -0.11969178943607937 0.745459752050128 3.365348570075175
+  position 0.31959684941945166 0.4195603506132433 3.2621030390268437
 }
 Background {
   skyColor [
@@ -114,7 +114,7 @@ DEF e-puck2 E-puck {
   name "e-puck2"
   controller "epuck_crown"
   supervisor TRUE
-  emitter_channel 0
+  emitter_channel 3
   receiver_channel 3
 }
 DEF e-puck3 E-puck {
@@ -123,7 +123,7 @@ DEF e-puck3 E-puck {
   name "e-puck3"
   controller "epuck_crown"
   supervisor TRUE
-  emitter_channel 0
+  emitter_channel 4
   receiver_channel 4
 }
 DEF e-puck4 E-puck {
@@ -132,42 +132,10 @@ DEF e-puck4 E-puck {
   name "e-puck4"
   controller "epuck_crown"
   supervisor TRUE
-  emitter_channel 0
+  emitter_channel 5
   receiver_channel 5
 }
 DEF e0 Pose {
-  translation 0 0 -0.2
-  children [
-    Shape {
-      appearance Appearance {
-        material Material {
-          diffuseColor 0 0 1
-        }
-      }
-      geometry Cylinder {
-        height 0.05
-        radius 0.05
-      }
-    }
-  ]
-}
-DEF e1 Pose {
-  translation 0 0 -0.2
-  children [
-    Shape {
-      appearance Appearance {
-        material Material {
-          diffuseColor 0 0 1
-        }
-      }
-      geometry Cylinder {
-        height 0.05
-        radius 0.05
-      }
-    }
-  ]
-}
-DEF e2 Pose {
   translation 0 0 -0.2
   children [
     Shape {
@@ -178,7 +146,39 @@ DEF e2 Pose {
       }
       geometry Cylinder {
         height 0.05
-        radius 0.05
+        radius 0.01
+      }
+    }
+  ]
+}
+DEF e1 Pose {
+  translation 0 0 -0.2
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 1 0 0
+        }
+      }
+      geometry Cylinder {
+        height 0.05
+        radius 0.01
+      }
+    }
+  ]
+}
+DEF e2 Pose {
+  translation 0 0 -0.2
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0 0 1
+        }
+      }
+      geometry Cylinder {
+        height 0.05
+        radius 0.01
       }
     }
   ]
@@ -194,7 +194,7 @@ DEF e3 Pose {
       }
       geometry Cylinder {
         height 0.05
-        radius 0.05
+        radius 0.01
       }
     }
   ]
@@ -210,7 +210,7 @@ DEF e4 Pose {
       }
       geometry Cylinder {
         height 0.05
-        radius 0.05
+        radius 0.01
       }
     }
   ]
@@ -226,7 +226,7 @@ DEF e5 Pose {
       }
       geometry Cylinder {
         height 0.05
-        radius 0.05
+        radius 0.01
       }
     }
   ]
@@ -237,12 +237,12 @@ DEF e6 Pose {
     Shape {
       appearance Appearance {
         material Material {
-          diffuseColor 1 0 0
+          diffuseColor 0 0 1
         }
       }
       geometry Cylinder {
         height 0.05
-        radius 0.05
+        radius 0.01
       }
     }
   ]
@@ -258,7 +258,7 @@ DEF e7 Pose {
       }
       geometry Cylinder {
         height 0.05
-        radius 0.05
+        radius 0.01
       }
     }
   ]
@@ -269,12 +269,12 @@ DEF e8 Pose {
     Shape {
       appearance Appearance {
         material Material {
-          diffuseColor 0 0 1
+          diffuseColor 1 0 0
         }
       }
       geometry Cylinder {
         height 0.05
-        radius 0.05
+        radius 0.01
       }
     }
   ]
@@ -290,7 +290,7 @@ DEF e9 Pose {
       }
       geometry Cylinder {
         height 0.05
-        radius 0.05
+        radius 0.01
       }
     }
   ]
@@ -300,7 +300,7 @@ RectangleArena {
   floorSize 1.25 1.25
 }
 Solid {
-  translation 0.125 0.225 0
+  translation 0.125 0.225 -1
   rotation 0 0 1 1.57079
   children [
     Shape {
@@ -317,7 +317,7 @@ Solid {
   name "wall2"
 }
 Solid {
-  translation -0.45 0 0
+  translation -0.45 0 -1
   children [
     Shape {
       appearance Appearance {

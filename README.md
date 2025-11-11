@@ -1,7 +1,7 @@
 # What to do
-- make sure the basic implementation works (Aymeric)
-- implement movement/collision 
-- estimate task utility and with regard to energy budget (Petr)
+- improve movement/collision
+- make navigation work (robots don't stuck into wall if task is across it) [Nova]
+- estimate task utility and with regard to energy budget [Petr]
 	- estimate real distance to target
 - implement limited communication range
 

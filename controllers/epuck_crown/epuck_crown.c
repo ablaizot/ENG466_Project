@@ -20,6 +20,7 @@
 #include <webots/distance_sensor.h>
 #include <webots/radio.h>
 #include <webots/motor.h>
+#include <webots/led.h>
   
 #include <webots/supervisor.h> 
 
@@ -27,6 +28,7 @@
 #define MAX_SPEED_WEB      6.28    // Maximum speed webots
 WbDeviceTag left_motor; //handler for left wheel of the robot
 WbDeviceTag right_motor; //handler for the right wheel of the robot
+WbDeviceTag leds[10];
 
 
 #define DEBUG 1
@@ -37,12 +39,20 @@ WbDeviceTag right_motor; //handler for the right wheel of the robot
 #define SPEED_UNIT_RADS     0.00628 // Conversion factor from speed unit to radian per second
 #define WHEEL_RADIUS        0.0205  // Wheel radius (meters)
 #define DELTA_T             TIME_STEP/1000   // Timestep (seconds)
-#define MAX_SPEED         500     // Maximum speed
+#define MAX_SPEED         800     // Maximum speed
 
 #define INVALID          -999
 #define BREAK            -999 //for physics plugin
 
 #define NUM_ROBOTS 5 // Change this also in the supervisor!
+#define EVENT_RANGE (0.1)
+
+#define MAX_WORK_TIME (120.0*1000) // 120s of maximum work time
+#define MAX_SIMULATION_TIME (180.0*1000) // 180s of simulation time
+#define MAX_TASKS 3
+#define RATE_OF_MOVEMENT 2.0 // how much time required to travel 1 unit of distance (2 seconds per meter travelled)
+
+#define AVG_TASK_PER_SECOND (20.0/(MAX_SIMULATION_TIME*NUM_ROBOTS)*1000)
 
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
@@ -55,6 +65,8 @@ typedef enum {
     GO_TO_GOAL      = 2,                    // Initial state aliases
     OBSTACLE_AVOID  = 3,
     RANDOM_WALK     = 4,
+    DOING_TASK      = 5,
+    DISABLED        = 6,
 } robot_state_t;
 
 #define DEFAULT_STATE (STAY)
@@ -76,13 +88,14 @@ uint16_t robot_id;          // Unique robot ID
 robot_state_t state;                 // State of the robot
 double my_pos[3];           // X, Z, Theta of this robot
 char target_valid;          // boolean; whether we are supposed to go to the target
-double target[99][3];       // x and z coordinates of target position (max 99 targets)
+double target[10][3];       // x and z coordinates of target position (max 10 targets)
 int lmsg, rmsg;             // Communication variables
 int indx;                   // Event index to be sent to the supervisor
 
 float buff[99];             // Buffer for physics plugin
 
 double stat_max_velocity;
+int worked_time = 0;
 
 
 // Proximity and radio handles
@@ -108,6 +121,16 @@ void limit(int *number, int limit) {
 
 double dist(double x0, double y0, double x1, double y1) {
     return sqrt((x0-x1)*(x0-x1) + (y0-y1)*(y0-y1));
+}
+
+
+// calculate the value of waiting and not working for a time
+double calculate_time_value(float time) {
+    float work_time_remain = MAX_WORK_TIME - worked_time;
+    float simulation_time_remain = MAX_SIMULATION_TIME - clock;
+    float time_factor = (simulation_time_remain - work_time_remain) / (MAX_SIMULATION_TIME - MAX_WORK_TIME);
+    //printf("Waiting evaluation: factor %0.2f, time %0.2f, total %f\n", time_factor, time, AVG_TASK_PER_SECOND * time * time_factor);
+    return AVG_TASK_PER_SECOND * time * time_factor;
 }
 
 // Check if we received a message and extract information
@@ -141,7 +164,7 @@ static void receive_updates()
 
         //find target list length
         i = 0;
-        while(target[i][2] != INVALID){ i++;}
+        while(round(target[i][2]) != INVALID){ i++;}
         target_list_length = i;  
         
         if(target_list_length == 0) target_valid = 0;   
@@ -168,7 +191,7 @@ static void receive_updates()
             // If event is done, delete it from array 
             for(i=0; i<=target_list_length; i++)
             {
-                if((int)target[i][2] == msg.event_id) 
+                if((int)round(target[i][2]) == msg.event_id) 
                 { //look for correct id (in case wrong event was done first)
                     for(; i<=target_list_length; i++)
                     { //push list to the left from event index
@@ -176,6 +199,7 @@ static void receive_updates()
                         target[i][1] = target[i+1][1];
                         target[i][2] = target[i+1][2];
                     }
+                    target[target_list_length+1][2] = INVALID;
                 }
             }
             // adjust target list length
@@ -200,102 +224,18 @@ static void receive_updates()
         // check if new event is being auctioned
         else if(msg.event_state == MSG_EVENT_NEW)
         {                
-            //*********         INSERT YOUR TACTIC BELOW         *********//
-            //                                                            //
-            // Determine your bid "d" and the index "indx" at             //
-            // which you want to insert the event into the target list.   //
-            // Available variables:                                       //
-            // my_pos[0], my_pos[1]: Current x and y position of e-puck   //
-            // msg.event_x, msg.event_z: Event x and y position           //
-            // target[n][0], target[n][1]: x and y pos of target n in your//
-            //                             target list                    //
-            // target_list_length: current length of your target list     //
-            //                                                            //
-            // You can use dist(ax, ay, bx, by) to determine the distance //
-            // between points a and b.                                    //
-            ////////////////////////////////////////////////////////////////
-
-            ///*** SIMPLE TACTIC ***///
-            // indx = target_list_length;
-            // double d = dist(my_pos[0], my_pos[1], msg.event_x, msg.event_y);
-            ///*** END SIMPLE TACTIC ***/
-                        
-
-            ///*** BETTER TACTIC ***///
-            // Place your code here for I17 
-            // indx = target_list_length;
-            // d = 0;
-            // // Find the distance between my_pos and all targets, plus the distance between last target and new event
-            // if(target_list_length > 0){
-            //     // TODO: put your strategy here
-            //     // find total distance between my_pos and all targets
-            //     for (i=0; i<indx; i++){
-            //         if (i==0){
-            //             d += dist(my_pos[0], my_pos[1], target[i][0], target[i][1]);
-            //         }else{
-            //             d += dist(target[i-1][0], target[i-1][1], target[i][0], target[i][1]);
-            //         }
-            //     }
-            //     d += dist(target[indx-1][0], target[indx-1][1], msg.event_x, msg.event_y);
-            // }else{
-            //     // TODO: put your strategy here
-            //     d = dist(my_pos[0], my_pos[1], msg.event_x, msg.event_y);
-            // }
-            ///*** END BETTER TACTIC ***/
-                        
-                        
-            ///*** BEST TACTIC ***/// 
-            // Place your code here for I20
-            // indx = 0;
-            // if(target_list_length > 0)
-            // {  
-            //     // for all the tasks inside the task list (i.e. target[i] where i goes up to target_list_length)  check if putting the current 
-            //     // event (located at (msg.event_x, msg.event_z)) in between two task results in  a smaller distance, and modify the d accordingly.
-            //
-            //     d = INFINITY;
-            //     for(i = 0; i <= target_list_length; i++) {
-            //         double total_dist = 0.0;
-            //         double prev_x, prev_y;
-            //         int j;
-            //
-            //         // Start from my_pos for the first segment
-            //         if(i == 0) {
-            //             prev_x = my_pos[0];
-            //             prev_y = my_pos[1];
-            //         } else {
-            //             prev_x = target[0][0];
-            //             prev_y = target[0][1];
-            //         }
-            //
-            //         // Calculate total distance if we insert the new event at position i
-            //         for(j = 0; j < target_list_length + 1; j++) {
-            //             double next_x, next_y;
-            //             if(j == i) {
-            //                 next_x = msg.event_x;
-            //                 next_y = msg.event_y;
-            //             } else if(j < i) {
-            //                 next_x = target[j][0];
-            //                 next_y = target[j][1];
-            //             } else {
-            //                 next_x = target[j-1][0];
-            //                 next_y = target[j-1][1];
-            //             }
-            //             total_dist += dist(prev_x, prev_y, next_x, next_y);
-            //             prev_x = next_x;
-            //             prev_y = next_y;
-            //         }
-            //
-            //         if(total_dist < d) {
-            //             d = total_dist;
-            //             indx = i;
-            //         }
-            //     }
-            // }
-            //
             // ///*** BEST TACTIC ***///
 
             indx = 0;
             double d = dist(my_pos[0], my_pos[1], msg.event_x, msg.event_y);
+
+            uint64_t completion_time;
+            if (msg.event_type == 0) {     // Type A task
+                completion_time = (robot_id % 2 == 0) ? 9: 3; // 3 or 9 seconds
+            } else {                        // Type B task
+                completion_time = (robot_id % 2 == 0) ? 1: 5; // 5 or 1 seconds
+            }
+
             if (target_list_length > 0) {
                 for (i = 0; i < target_list_length; i++) {
                     if (i == 0) {
@@ -320,27 +260,34 @@ static void receive_updates()
                     }
                 }
             }
-        
- ///*** END BEST TACTIC ***///
 
-            ///*** END BEST TACTIC ***///
+            double task_time = RATE_OF_MOVEMENT * d + completion_time;
+
+            // don't bid if waiting is better
+            if (calculate_time_value(task_time) > 1)
+                task_time = 1.0/0.0;
+
+            // don't bid if DISABLED or has already maximum tasks planned
+            if (target_list_length >= MAX_TASKS || state == DISABLED)
+                task_time = 1.0/0.0;
+        
+            const bid_t my_bid = {robot_id, msg.event_id, task_time, indx};
                 
             // Send my bid to the supervisor
-            const bid_t my_bid = {robot_id, msg.event_id, d, indx};
             // print bid
-            printf("Robot %d bidding %.2f for event %d at index %d\n", robot_id, d, msg.event_id, indx);
+            //printf("Robot %d bidding %.2f for event %d at index %d\n", robot_id, d, msg.event_id, indx);
         
             wb_emitter_set_channel(emitter_tag, robot_id+1);
             wb_emitter_send(emitter_tag, &my_bid, sizeof(bid_t));
             // print emmitter channel
-            printf("Sent bid from robot %d on channel %d\n", robot_id, wb_emitter_get_channel(emitter_tag));            
+            //printf("Sent bid from robot %d on channel %d\n", robot_id, wb_emitter_get_channel(emitter_tag));            
         }
     }
     
     
     // Communication with physics plugin (channel 0)            
         i = 0; k = 1;
-        while((int)target[i][2] != INVALID){i++;}
+        while((int)round(target[i][2]) != INVALID){i++;}
         target_list_length = i; 
         if(target_list_length > 0)
         {        
@@ -362,7 +309,7 @@ static void receive_updates()
                 k++;  
             }
             // send, reset channel        
-            if(target[0][2] == INVALID){ buff[0] = my_pos[0]; buff[1] = my_pos[1];}
+            if(round(target[0][2]) == INVALID){ buff[0] = my_pos[0]; buff[1] = my_pos[1];}
             wb_emitter_send(emitter_tag, &buff, (5*target_list_length)*sizeof(float));
            // printf("Sent path from robot %d on channel %d\n", robot_id, wb_emitter_get_channel(emitter_tag));               
             wb_emitter_set_channel(emitter_tag,robot_id+1);      
@@ -380,6 +327,12 @@ void reset(void)
   //get motors
   left_motor = wb_robot_get_device("left wheel motor");
   right_motor = wb_robot_get_device("right wheel motor");
+  for (int i = 0; i < 10; i++) {
+    char ledname[16];
+    sprintf(ledname, "led%d", i);
+    leds[i] = wb_robot_get_device(ledname);
+  }
+
   wb_motor_set_position(left_motor, INFINITY);
   wb_motor_set_position(right_motor, INFINITY);
   
@@ -396,7 +349,7 @@ void reset(void)
     indx = 0;
     
     // Init target positions to "INVALID"
-    for(i=0;i<99;i++){ 
+    for(i=0;i<10;i++){ 
         target[i][0] = 0;
         target[i][1] = 0;
         target[i][2] = INVALID; 
@@ -411,6 +364,11 @@ void reset(void)
     int tmp_id;
     if (sscanf(robot_name, "e-puck%d", &tmp_id)) {robot_id = (uint16_t)tmp_id;} 
     else {fprintf(stderr, "ERROR: couldn't parse my id %s \n", robot_name); exit(1);}
+
+    
+    for (int i = 0; i < 8; i++) {
+        wb_led_set(leds[i], robot_id%2);
+    } 
 
     // Am I used in this simulation?
     if (robot_id >= NUM_ROBOTS) {
@@ -438,6 +396,38 @@ void reset(void)
 
 void update_state(int *distances)
 {
+    // compute distance to goal
+    float a = target[0][1] - my_pos[0];
+    float b = target[0][1] - my_pos[1];
+    float task_dist = sqrt(a*a + b*b);
+    
+    wb_led_set(leds[8], 0);
+
+    if (state == DISABLED)
+        return;
+
+    if (worked_time >= MAX_WORK_TIME) {
+        WbNodeRef self = wb_supervisor_node_get_self();
+        WbFieldRef translation = wb_supervisor_node_get_field(self, "translation");
+        const double new_pos[3] = { 0.5-0.25*robot_id, -0.75, 0 };
+        wb_supervisor_field_set_sf_vec3f(translation, new_pos);
+        printf("Disabled robot %d\n",robot_id);
+        state = DISABLED;
+        for (int i=0; i<10; i++) { // unbid for all event -> send -1 as bid
+            if (round(target[i][2]) == INVALID)
+                continue;
+            
+            const bid_t my_bid = {robot_id, round(target[i][2]), -1, i};
+            printf("Robot %d abandonning event %1.0f :(\n", robot_id, target[i][2]);
+            wb_emitter_set_channel(emitter_tag, robot_id+1);
+            wb_emitter_send(emitter_tag, &my_bid, sizeof(bid_t));
+        }
+        return;
+    }
+
+    if (_sum_distances > STATECHANGE_DIST && state == GO_TO_GOAL) {
+        state = OBSTACLE_AVOID;
+    } else if (target_valid && task_dist >= EVENT_RANGE) {
 
 int obstacle_detected_now = 0;
 
@@ -466,7 +456,6 @@ int obstacle_detected_now = 0;
     {
         state = GO_TO_GOAL;
     }
-    
     else
     {
         state = DEFAULT_STATE;
@@ -641,6 +630,16 @@ void run(int ms)
             msr = 0;
             break;
 
+        case DOING_TASK:
+            msl = 0;
+            msr = 0;
+            break;
+
+        case DISABLED:
+            msl = 0;
+            msr = 0;
+            break;
+
         case GO_TO_GOAL:
             compute_go_to_goal(&msl, &msr);
             break;
@@ -663,6 +662,11 @@ void run(int ms)
     wb_motor_set_velocity(left_motor, msl_w);
     wb_motor_set_velocity(right_motor, msr_w);
     update_self_motion(msl, msr);
+
+    if (state != STAY && state != DISABLED) {
+        worked_time += ms;
+        //printf("Worked for %0.2f \n", worked_time);
+    }
 
     // Update clock
     clock += ms;

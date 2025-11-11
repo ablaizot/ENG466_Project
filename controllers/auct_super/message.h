@@ -20,6 +20,7 @@ typedef struct {
   uint16_t event_id;
   double event_x;
   double event_y;
+  int event_type;
   // ]]
   int event_index;
 } message_t;
