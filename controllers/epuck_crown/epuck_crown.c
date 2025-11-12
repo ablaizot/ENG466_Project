@@ -39,7 +39,7 @@ WbDeviceTag leds[10];
 #define SPEED_UNIT_RADS     0.00628 // Conversion factor from speed unit to radian per second
 #define WHEEL_RADIUS        0.0205  // Wheel radius (meters)
 #define DELTA_T             TIME_STEP/1000   // Timestep (seconds)
-#define MAX_SPEED         800     // Maximum speed
+#define MAX_SPEED         1000     // Maximum speed
 
 #define INVALID          -999
 #define BREAK            -999 //for physics plugin
@@ -58,7 +58,7 @@ WbDeviceTag leds[10];
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /* Collective decision parameters */
 
-#define STATECHANGE_DIST 90   // minimum value of all sensor inputs combined to change to obstacle avoidance mode
+#define STATECHANGE_DIST 120   // minimum value of all sensor inputs combined to change to obstacle avoidance mode
 
 typedef enum {
     STAY            = 1,
@@ -75,7 +75,7 @@ typedef enum {
 /* e-Puck parameters */
 
 #define NB_SENSORS           8
-#define BIAS_SPEED           300
+#define BIAS_SPEED           400
 
 // Weights for the Braitenberg algorithm
 // NOTE: Weights from reynolds2.h
@@ -96,6 +96,8 @@ float buff[99];             // Buffer for physics plugin
 
 double stat_max_velocity;
 int worked_time = 0;
+
+float prev_bearing[NUM_ROBOTS] = {0}; //Used for PD-controller
 
 
 // Proximity and radio handles
@@ -400,6 +402,7 @@ void update_state(int *distances)
     float a = target[0][1] - my_pos[0];
     float b = target[0][1] - my_pos[1];
     float task_dist = sqrt(a*a + b*b);
+    int obstacle_detected_now = 0;
     
     wb_led_set(leds[8], 0);
 
@@ -425,16 +428,10 @@ void update_state(int *distances)
         return;
     }
 
-    if (_sum_distances > STATECHANGE_DIST && state == GO_TO_GOAL) {
-        state = OBSTACLE_AVOID;
-    } else if (target_valid && task_dist >= EVENT_RANGE) {
-
-int obstacle_detected_now = 0;
-
-    if (target_valid && dist(my_pos[0], my_pos[1], target[0][0], target[0][1]) < 0.1)
+    if (target_valid && dist(my_pos[0], my_pos[1], target[0][0], target[0][1]) < 0.09)
     {
-    state = STAY;
-    return;
+        state = STAY;
+        return;
     }
     
 
@@ -487,8 +484,17 @@ void update_self_motion(int msl, int msr) {
 
     // Keep track of highest velocity for modelling
     double velocity = du * 1000.0 / (double) TIME_STEP;
+
+    if (velocity > 0.001) { // Only print if moving to reduce clutter
+        printf("Robot %d | State: %d | Velocity: %f m/s\n", 
+            robot_id, state, velocity);
+    }
+
+    
     if (state == GO_TO_GOAL && velocity > stat_max_velocity)
         stat_max_velocity = velocity;
+
+    
 }
 
 
@@ -514,23 +520,22 @@ void update_self_motion(int msl, int msr) {
 
 void compute_avoid_obstacle(int *msl, int *msr, int distances[])
 {
-    int th_obstacle = 80;
-    int th_free = 75;
-    int turn_speed = 300;
-    int forward_speed = 100;
+    int th_obstacle = 120;
+    int base_speed = 600;
+    int turn_speed = 800;
+    int edge_speed = 400;
+    int corr = 150;
 
     int front = distances[0] + distances[7];
-    int back =  distances[3] + distances[4];
-    int left = distances[5] + distances[6];
-    int right = distances[1] + distances[2];
+    int front_left = distances[7] + distances[6];
+    int front_right = distances[0] + distances[1];
     
+    *msr = base_speed;
+    *msl = base_speed;
     
-    *msr = forward_speed;
-    *msl = forward_speed;
-    
-    if (front > 2*th_obstacle)
+    if (front > 2 * th_obstacle)
     {
-        if (left < right)
+        if (front_left < front_right)
         {
             *msr = turn_speed;
             *msl = -turn_speed;
@@ -540,30 +545,22 @@ void compute_avoid_obstacle(int *msl, int *msr, int distances[])
             *msr = -turn_speed;
             *msl = turn_speed;
         }
-    }
-    else if (left + front > 4*th_obstacle && left < 2*th_free)
+    }  
+        
+    else if (front_left > 2 * th_obstacle)
     {
-        *msr = forward_speed - 20;
-        *msl = forward_speed + 20;   
-
-    }
-    else if (right + front > 4*th_obstacle && left < 2*th_free)
-    {
-        *msr = forward_speed + 20;
-        *msl = forward_speed - 20;   
+        *msr = edge_speed - corr;
+        *msl = edge_speed + corr;
+       
     }
     
-    else if (left > 2*th_obstacle && right < 2*th_free)
+    else if (front_right > 2 * th_obstacle)
     {
-        *msr = forward_speed - 10;
-        *msl = forward_speed + 10;   
+        *msr = edge_speed + corr;
+        *msl = edge_speed - corr;
+        
+    }
 
-    }
-    else if (right > 2*th_obstacle && left < 2*th_free)
-    {
-        *msr = forward_speed + 10;
-        *msl = forward_speed - 10;   
-    }
     
     limit(msl, MAX_SPEED);
     limit(msr, MAX_SPEED);
@@ -582,19 +579,29 @@ void compute_go_to_goal(int *msl, int *msr)
 
     float Ku = 0.2;   // Forward control coefficient
     float Kw = 10.0;  // Rotational control coefficient
-    float range = 1; //sqrtf(x*x + y*y);   // Distance to the wanted position
+    float Kd = 3.0;
+    float range = sqrtf(x*x + y*y);   // Distance to the wanted position
     float bearing = atan2(y, x);     // Orientation of the wanted position
     
     // Compute forward control
     float u = Ku*range*cosf(bearing);
-    // Compute rotational control
-    float w = Kw*range*sinf(bearing);
+    
+    // Compute rotational control with Damping controller
+    float d_bearing = bearing - prev_bearing[robot_id];
+    
+    if (d_bearing > M_PI) d_bearing -= 2.0 * M_PI;
+    if (d_bearing < -M_PI) d_bearing += 2.0* M_PI;
+    
+    prev_bearing[robot_id] = bearing;
+    
+    float w = Kw*range*sinf(bearing) + Kd * d_bearing / DELTA_T;
     
     // Convert to wheel speeds!
-    *msl = 20*(u - AXLE_LENGTH*w/2.0) / WHEEL_RADIUS;
-    *msr = 20*(u + AXLE_LENGTH*w/2.0) / WHEEL_RADIUS;
-    limit(msl,MAX_SPEED);
-    limit(msr,MAX_SPEED);
+    float scale_factor = 80.0;
+    *msl = scale_factor*(u - AXLE_LENGTH*w/2.0) / WHEEL_RADIUS;
+    *msr = scale_factor*(u + AXLE_LENGTH*w/2.0) / WHEEL_RADIUS;
+    limit(msl,MAX_SPEED - 0.01);
+    limit(msr,MAX_SPEED - 0.01);
    
 }
 
