@@ -1,3 +1,6 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
-.vscode/settings.json
+.vscode/settings.jsons
+*.exe
+controllers/epuck_crown/build
+controllers/auct_super/build
