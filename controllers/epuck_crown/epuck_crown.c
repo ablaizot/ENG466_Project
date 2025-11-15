@@ -32,7 +32,7 @@ WbDeviceTag leds[10];
 
 
 #define DEBUG 1
-#define TIME_STEP           16      // Timestep (ms)
+#define TIME_STEP           64      // Timestep (ms)
 #define RX_PERIOD           2    // time difference between two received elements (ms) (1000)
 
 #define AXLE_LENGTH         0.052   // Distance between wheels of robot (meters)
@@ -190,14 +190,14 @@ double calculate_distance_walls(double start_x, double start_y, double target_x,
 
     if (segmentsIntersect(startPos, targetPos, line1_A, line1_B)) {
         if (intersectionPoint(startPos, targetPos, line1_A, line1_B, &hit)) {
-            printf("Robot %d, crossed line 1 at: (%.2f, %.2f)\n", robot_id, hit.x, hit.y);
+            //printf("Robot %d, crossed line 1 at: (%.2f, %.2f)\n", robot_id, hit.x, hit.y);
             distance += dist(hit.x, hit.y, line1_B.x, line1_B.y) * 2;
         }
     } 
 
     if (segmentsIntersect(startPos, targetPos, line2_A, line2_B)) {
         if (intersectionPoint(startPos, targetPos, line2_A, line2_B, &hit)) {
-            printf("Robot %d, crossed line 2 at: (%.2f, %.2f)\n", robot_id, hit.x, hit.y);
+            //printf("Robot %d, crossed line 2 at: (%.2f, %.2f)\n", robot_id, hit.x, hit.y);
             distance += dist(hit.x, hit.y, line2_A.x, line2_A.y) * 2;
         }
     } 
@@ -731,7 +731,7 @@ void run(int ms)
     }
     // Set the speed
     
-    printf("Robot %d speeds %d, %d\n", robot_id, msl, msr);
+    //printf("Robot %d speeds %d, %d\n", robot_id, msl, msr);
     msl_w = msl*MAX_SPEED_WEB/1000;
     msr_w = msr*MAX_SPEED_WEB/1000;
     wb_motor_set_velocity(left_motor, msl_w);
