@@ -42,7 +42,7 @@ using namespace std;
 #define WAITING_TIMEOUT (10000)   // ticks until an event auction runs out
 #define EVENT_GENERATION_DELAY (1000) // average time between events ms (expo distribution)
 
-#define GPS_INTERVAL (500)
+#define GPS_INTERVAL (200)
 
 // Parameters that can be changed
 #define NUM_ROBOTS 5                 // Change this also in the epuck_crown.c!

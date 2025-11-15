@@ -32,20 +32,20 @@ WbDeviceTag leds[10];
 
 
 #define DEBUG 1
-#define TIME_STEP           64      // Timestep (ms)
+#define TIME_STEP           16      // Timestep (ms)
 #define RX_PERIOD           2    // time difference between two received elements (ms) (1000)
 
 #define AXLE_LENGTH         0.052   // Distance between wheels of robot (meters)
 #define SPEED_UNIT_RADS     0.00628 // Conversion factor from speed unit to radian per second
 #define WHEEL_RADIUS        0.0205  // Wheel radius (meters)
-#define DELTA_T             TIME_STEP/1000   // Timestep (seconds)
+#define DELTA_T             (TIME_STEP/1000.0)   // Timestep (seconds)
 #define MAX_SPEED         1000     // Maximum speed
 
 #define INVALID          -999
 #define BREAK            -999 //for physics plugin
 
 #define NUM_ROBOTS 5 // Change this also in the supervisor!
-#define EVENT_RANGE (0.1)
+#define EVENT_RANGE (0.09)
 
 #define MAX_WORK_TIME (120.0*1000) // 120s of maximum work time
 #define MAX_SIMULATION_TIME (180.0*1000) // 180s of simulation time
@@ -175,9 +175,12 @@ static void receive_updates()
         // Event state machine
         if(msg.event_state == MSG_EVENT_GPS_ONLY)
         {
+            //printf("Original position of robot %d: %1.3f, %1.3f angle %1.3f\n",robot_id, my_pos[0], my_pos[1], my_pos[2]);
             my_pos[0] = msg.robot_x;
             my_pos[1] = msg.robot_y;
             my_pos[2] = msg.heading;
+            
+            //printf("New position of robot %d: %1.3f, %1.3f angle %1.3f\n",robot_id, my_pos[0], my_pos[1], my_pos[2]);
             continue;
         }
         else if(msg.event_state == MSG_QUIT)
@@ -201,12 +204,12 @@ static void receive_updates()
                         target[i][1] = target[i+1][1];
                         target[i][2] = target[i+1][2];
                     }
-                    target[target_list_length+1][2] = INVALID;
+                    target[i+1][2] = INVALID;
+                    if(target_list_length-1 == 0) target_valid = 0; //used in general state machine 
+                    target_list_length = target_list_length-1;    
                 }
             }
             // adjust target list length
-            if(target_list_length-1 == 0) target_valid = 0; //used in general state machine 
-            target_list_length = target_list_length-1;    
         }
         else if(msg.event_state == MSG_EVENT_WON)
         {
@@ -428,9 +431,9 @@ void update_state(int *distances)
         return;
     }
 
-    if (target_valid && dist(my_pos[0], my_pos[1], target[0][0], target[0][1]) < 0.09)
+    if (target_valid && dist(my_pos[0], my_pos[1], target[0][0], target[0][1]) < EVENT_RANGE)
     {
-        state = STAY;
+        state = DOING_TASK;
         return;
     }
     
@@ -444,17 +447,11 @@ void update_state(int *distances)
         }
     }
     
-    if (obstacle_detected_now) 
-    {
+    if (obstacle_detected_now) {
         state = OBSTACLE_AVOID;  
-    }
-    
-    else if (target_valid)
-    {
+    } else if (target_valid) {
         state = GO_TO_GOAL;
-    }
-    else
-    {
+    } else {
         state = DEFAULT_STATE;
     }
 }
@@ -479,15 +476,14 @@ void update_self_motion(int msl, int msr) {
     my_pos[2] -= dtheta;
     
     // Keep orientation within 0, 2pi
-    if (my_pos[2] > 2*M_PI) my_pos[2] -= 2.0*M_PI;
-    if (my_pos[2] < 0) my_pos[2] += 2.0*M_PI;
+    if (my_pos[2] > M_PI) my_pos[2] -= 2.0*M_PI;
+    if (my_pos[2] < -M_PI) my_pos[2] += 2.0*M_PI;
 
     // Keep track of highest velocity for modelling
     double velocity = du * 1000.0 / (double) TIME_STEP;
 
     if (velocity > 0.001) { // Only print if moving to reduce clutter
-        printf("Robot %d | State: %d | Velocity: %f m/s\n", 
-            robot_id, state, velocity);
+        //printf("Robot %d | State: %d | Velocity: %f m/s\n", robot_id, state, velocity);
     }
 
     
@@ -578,9 +574,9 @@ void compute_go_to_goal(int *msl, int *msr)
     float y =  a*sinf(my_pos[2]) + b*cosf(my_pos[2]); // y in robot coordinates
 
     float Ku = 0.2;   // Forward control coefficient
-    float Kw = 10.0;  // Rotational control coefficient
-    float Kd = 3.0;
-    float range = sqrtf(x*x + y*y);   // Distance to the wanted position
+    float Kw = 5.0;  // Rotational control coefficient
+    float Kd = 0.5;
+    float range = 1;//sqrtf(x*x + y*y);   // Distance to the wanted position
     float bearing = atan2(y, x);     // Orientation of the wanted position
     
     // Compute forward control
@@ -597,7 +593,7 @@ void compute_go_to_goal(int *msl, int *msr)
     float w = Kw*range*sinf(bearing) + Kd * d_bearing / DELTA_T;
     
     // Convert to wheel speeds!
-    float scale_factor = 80.0;
+    float scale_factor = 40.0;
     *msl = scale_factor*(u - AXLE_LENGTH*w/2.0) / WHEEL_RADIUS;
     *msr = scale_factor*(u + AXLE_LENGTH*w/2.0) / WHEEL_RADIUS;
     limit(msl,MAX_SPEED - 0.01);
@@ -672,7 +668,7 @@ void run(int ms)
 
     if (state != STAY && state != DISABLED) {
         worked_time += ms;
-        //printf("Worked for %0.2f \n", worked_time);
+        //printf("Worked for %d \n", worked_time);
     }
 
     // Update clock
