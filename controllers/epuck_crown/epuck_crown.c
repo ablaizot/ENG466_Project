@@ -50,7 +50,7 @@ WbDeviceTag leds[10];
 #define MAX_WORK_TIME (120.0*1000) // 120s of maximum work time
 #define MAX_SIMULATION_TIME (180.0*1000) // 180s of simulation time
 #define MAX_TASKS 3
-#define RATE_OF_MOVEMENT 2.0 // how much time required to travel 1 unit of distance (2 seconds per meter travelled)
+#define RATE_OF_MOVEMENT 5.0 // how much time required to travel 1 unit of distance (2 seconds per meter travelled)
 
 #define AVG_TASK_PER_SECOND (20.0/(MAX_SIMULATION_TIME*NUM_ROBOTS)*1000)
 
@@ -125,6 +125,44 @@ double dist(double x0, double y0, double x1, double y1) {
     return sqrt((x0-x1)*(x0-x1) + (y0-y1)*(y0-y1));
 }
 
+typedef struct { double x, y; } Vec2;
+
+int orientation(Vec2 a, Vec2 b, Vec2 c) {
+    double v = (b.y - a.y) * (c.x - b.x) -
+               (b.x - a.x) * (c.y - b.y);
+    if (v > 0) return 1;   // clockwise
+    if (v < 0) return 2;   // counter-clockwise
+    return 0;              // collinear
+}
+int onSegment(Vec2 a, Vec2 x, Vec2 b) {
+    return (x.x <= fmax(a.x, b.x) && x.x >= fmin(a.x, b.x) &&
+            x.y <= fmax(a.y, b.y) && x.y >= fmin(a.y, b.y));
+}
+int segmentsIntersect(Vec2 A, Vec2 B, Vec2 C, Vec2 D) {
+    if (orientation(A, B, C) != orientation(A, B, D) && orientation(C, D, A) != orientation(C, D, B)) 
+        return 1;
+    return 0;
+}
+int intersectionPoint(Vec2 A, Vec2 B, Vec2 C, Vec2 D, Vec2 *out) {
+    double x1=A.x, y1=A.y, x2=B.x, y2=B.y;
+    double x3=C.x, y3=C.y, x4=D.x, y4=D.y;
+
+    double denom = (x1-x2)*(y3-y4) - (y1-y2)*(x3-x4);
+    if (fabs(denom) < 1e-9) return 0; // Parallel or collinear
+
+    double px = ((x1*y2 - y1*x2)*(x3 - x4) -
+                 (x1 - x2)*(x3*y4 - y3*x4)) / denom;
+
+    double py = ((x1*y2 - y1*x2)*(y3 - y4) -
+                 (y1 - y2)*(x3*y4 - y3*x4)) / denom;
+
+    Vec2 P = {px, py};
+
+    if (!onSegment(A, P, B) || !onSegment(C, P, D)) return 0;
+
+    *out = P;
+    return 1;
+}
 
 // calculate the value of waiting and not working for a time
 double calculate_time_value(float time) {
@@ -133,6 +171,38 @@ double calculate_time_value(float time) {
     float time_factor = (simulation_time_remain - work_time_remain) / (MAX_SIMULATION_TIME - MAX_WORK_TIME);
     //printf("Waiting evaluation: factor %0.2f, time %0.2f, total %f\n", time_factor, time, AVG_TASK_PER_SECOND * time * time_factor);
     return AVG_TASK_PER_SECOND * time * time_factor;
+}
+
+double calculate_distance_walls(double start_x, double start_y, double target_x, double target_y) {
+    Vec2 startPos = {start_x, start_y};
+    Vec2 targetPos = {target_x, target_y};
+
+    Vec2 line1_A = {-0.45-0.1875, 0.0}; // wall 1
+    Vec2 line1_B = {-0.45+0.1875, 0.0};
+
+    Vec2 line2_A = {0.125, 0.225-0.425}; // wall 2
+    Vec2 line2_B = {0.125, 0.225+0.425};
+    
+
+    Vec2 hit;
+
+    double distance = dist(start_x, start_y, target_x, target_y);
+
+    if (segmentsIntersect(startPos, targetPos, line1_A, line1_B)) {
+        if (intersectionPoint(startPos, targetPos, line1_A, line1_B, &hit)) {
+            printf("Robot %d, crossed line 1 at: (%.2f, %.2f)\n", robot_id, hit.x, hit.y);
+            distance += dist(hit.x, hit.y, line1_B.x, line1_B.y) * 2;
+        }
+    } 
+
+    if (segmentsIntersect(startPos, targetPos, line2_A, line2_B)) {
+        if (intersectionPoint(startPos, targetPos, line2_A, line2_B, &hit)) {
+            printf("Robot %d, crossed line 2 at: (%.2f, %.2f)\n", robot_id, hit.x, hit.y);
+            distance += dist(hit.x, hit.y, line2_A.x, line2_A.y) * 2;
+        }
+    } 
+    
+    return distance;
 }
 
 // Check if we received a message and extract information
@@ -232,7 +302,7 @@ static void receive_updates()
             // ///*** BEST TACTIC ***///
 
             indx = 0;
-            double d = dist(my_pos[0], my_pos[1], msg.event_x, msg.event_y);
+            double d = calculate_distance_walls(my_pos[0], my_pos[1], msg.event_x, msg.event_y);
 
             uint64_t completion_time;
             if (msg.event_type == 0) {     // Type A task
@@ -244,14 +314,14 @@ static void receive_updates()
             if (target_list_length > 0) {
                 for (i = 0; i < target_list_length; i++) {
                     if (i == 0) {
-                        double dbeforetogoal = dist(my_pos[0], my_pos[1], msg.event_x, msg.event_y);
-                        double daftertogoal  = dist(target[i][0], target[i][1], msg.event_x, msg.event_y);
-                        double dbeforetodafter = dist(my_pos[0], my_pos[1], target[i][0], target[i][1]);
+                        double dbeforetogoal = calculate_distance_walls(my_pos[0], my_pos[1], msg.event_x, msg.event_y);
+                        double daftertogoal  = calculate_distance_walls(target[i][0], target[i][1], msg.event_x, msg.event_y);
+                        double dbeforetodafter = calculate_distance_walls(my_pos[0], my_pos[1], target[i][0], target[i][1]);
                         d = dbeforetogoal + daftertogoal - dbeforetodafter;
                     } else {
-                        double dbeforetogoal = dist(target[i-1][0], target[i-1][1], msg.event_x, msg.event_y);
-                        double daftertogoal  = dist(target[i][0], target[i][1], msg.event_x, msg.event_y);
-                        double dbeforetodafter = dist(target[i-1][0], target[i-1][1], target[i][0], target[i][1]);
+                        double dbeforetogoal = calculate_distance_walls(target[i-1][0], target[i-1][1], msg.event_x, msg.event_y);
+                        double daftertogoal  = calculate_distance_walls(target[i][0], target[i][1], msg.event_x, msg.event_y);
+                        double dbeforetodafter = calculate_distance_walls(target[i-1][0], target[i-1][1], target[i][0], target[i][1]);
                         if ((dbeforetogoal + daftertogoal - dbeforetodafter) < d) {
                             d = dbeforetogoal + daftertogoal - dbeforetodafter;
                             indx = i;
@@ -660,6 +730,8 @@ void run(int ms)
             printf("Invalid state: robot_id %d \n", robot_id);
     }
     // Set the speed
+    
+    printf("Robot %d speeds %d, %d\n", robot_id, msl, msr);
     msl_w = msl*MAX_SPEED_WEB/1000;
     msr_w = msr*MAX_SPEED_WEB/1000;
     wb_motor_set_velocity(left_motor, msl_w);
