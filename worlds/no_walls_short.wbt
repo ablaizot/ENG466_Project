@@ -1,0 +1,345 @@
+#VRML_SIM R2025a utf8
+
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/robots/gctronic/e-puck/protos/E-puck.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/floors/protos/RectangleArena.proto"
+
+WorldInfo {
+  info [
+    "The model of the Khepera III robot"
+    "Author: Simon Blanchoud"
+    "Date: 26 SEP 2006"
+  ]
+  title "Lab08 Market"
+  basicTimeStep 64
+}
+Viewpoint {
+  orientation -0.6557161227352512 -0.11969178943607937 0.745459752050128 3.365348570075175
+  position 0.31959684941945166 0.4195603506132433 3.2621030390268437
+}
+Background {
+  skyColor [
+    0.4 0.7 1
+  ]
+}
+PointLight {
+  attenuation 0 0 0.5
+  intensity 0.5
+  location 0.55 -0.14 0.6
+}
+PointLight {
+  attenuation 0 0 0.5
+  intensity 0.5
+  location -0.5 0.43 0.6
+}
+Robot {
+  children [
+    DEF sup_emitter Emitter {
+      name "sup_emitter"
+      channel 5
+    }
+    DEF rec1 Receiver {
+      name "rec1"
+      channel 2
+    }
+    DEF rec2 Receiver {
+      name "rec2"
+      channel 3
+      baudRate 960000
+    }
+    DEF rec3 Receiver {
+      name "rec3"
+      channel 4
+      baudRate 960000
+    }
+    DEF rec4 Receiver {
+      name "rec4"
+      channel 5
+      baudRate 960000
+    }
+    DEF rec5 Receiver {
+      name "rec5"
+      channel 5
+      baudRate 960000
+    }
+    DEF rec6 Receiver {
+      name "rec6"
+      channel 6
+      baudRate 960000
+    }
+    DEF rec7 Receiver {
+      name "rec7"
+      channel 7
+      baudRate 960000
+    }
+    DEF rec8 Receiver {
+      name "rec8"
+      channel 8
+      baudRate 960000
+    }
+    DEF rec9 Receiver {
+      name "rec9"
+      channel 9
+      baudRate 960000
+    }
+    DEF rec0 Receiver {
+      name "rec0"
+      channel 1
+      baudRate 960000
+    }
+  ]
+  name "supervisor"
+  controller "auct_super"
+  supervisor TRUE
+}
+DEF e-puck0 E-puck {
+  translation -0.36923021011651674 0.6975375576210103 -6.409085575649794e-05
+  rotation 0.0006691288152868299 -0.0017932553691855152 0.999998168249227 0.7280602939650604
+  name "e-puck0"
+  controller "short_range_epuck"
+  supervisor TRUE
+  emitter_channel 0
+}
+DEF e-puck1 E-puck {
+  translation -0.6113254448467565 -0.5370531096337272 -7.018217799758565e-05
+  rotation -8.412693469233174e-06 -9.549251675248533e-06 -0.9999999999190192 1.4653069302597486
+  name "e-puck1"
+  controller "short_range_epuck"
+  supervisor TRUE
+  emitter_channel 0
+  receiver_channel 2
+}
+DEF e-puck2 E-puck {
+  translation 0.8545568530251683 -0.49174308410102735 -9.415933186906686e-05
+  rotation 0.0004747505600848836 0.000611390121222392 0.9999997004069677 1.8243634140881906
+  name "e-puck2"
+  controller "short_range_epuck"
+  supervisor TRUE
+  emitter_channel 3
+  receiver_channel 3
+}
+DEF e-puck3 E-puck {
+  translation 0.5363893655552989 0.3336770561838342 -7.282393710116887e-05
+  rotation 0.0007404216614904846 -0.000398508813033931 -0.9999996464831821 -1.355117099775451
+  name "e-puck3"
+  controller "short_range_epuck"
+  supervisor TRUE
+  emitter_channel 4
+  receiver_channel 4
+}
+DEF e-puck4 E-puck {
+  translation 0.24763423451522149 -0.08636116211272075 -0.00011165164304883547
+  rotation -8.278045819075025e-05 0.00036782861379336125 0.9999999289247509 -2.7437364185200788
+  name "e-puck4"
+  controller "short_range_epuck"
+  supervisor TRUE
+  emitter_channel 5
+  receiver_channel 5
+}
+DEF e0 Pose {
+  translation 0 0 -0.2
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 1 0 0
+        }
+      }
+      geometry Cylinder {
+        height 0.05
+        radius 0.01
+      }
+    }
+  ]
+}
+DEF e1 Pose {
+  translation 0 0 -0.2
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 1 0 0
+        }
+      }
+      geometry Cylinder {
+        height 0.05
+        radius 0.01
+      }
+    }
+  ]
+}
+DEF e2 Pose {
+  translation 0 0 -0.2
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0 0 1
+        }
+      }
+      geometry Cylinder {
+        height 0.05
+        radius 0.01
+      }
+    }
+  ]
+}
+DEF e3 Pose {
+  translation 0 0 -0.2
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0 0 1
+        }
+      }
+      geometry Cylinder {
+        height 0.05
+        radius 0.01
+      }
+    }
+  ]
+}
+DEF e4 Pose {
+  translation 0 0 -0.2
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0 0 1
+        }
+      }
+      geometry Cylinder {
+        height 0.05
+        radius 0.01
+      }
+    }
+  ]
+}
+DEF e5 Pose {
+  translation 0 0 -0.2
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 1 0 0
+        }
+      }
+      geometry Cylinder {
+        height 0.05
+        radius 0.01
+      }
+    }
+  ]
+}
+DEF e6 Pose {
+  translation 0 0 -0.2
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0 0 1
+        }
+      }
+      geometry Cylinder {
+        height 0.05
+        radius 0.01
+      }
+    }
+  ]
+}
+DEF e7 Pose {
+  translation 0 0 -0.2
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0 0 1
+        }
+      }
+      geometry Cylinder {
+        height 0.05
+        radius 0.01
+      }
+    }
+  ]
+}
+DEF e8 Pose {
+  translation 0 0 -0.2
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 1 0 0
+        }
+      }
+      geometry Cylinder {
+        height 0.05
+        radius 0.01
+      }
+    }
+  ]
+}
+DEF e9 Pose {
+  translation 0 0 -0.2
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0 0 1
+        }
+      }
+      geometry Cylinder {
+        height 0.05
+        radius 0.01
+      }
+    }
+  ]
+}
+RectangleArena {
+  rotation 0 0 1 1.5707963267948966
+  floorSize 1.25 1.25
+}
+Solid {
+  translation 0.125 0.225 -1
+  rotation 0 0 1 1.57079
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.5 0.5 0.5
+        }
+      }
+      geometry Box {
+        size 0.85 0.01 0.1
+      }
+    }
+  ]
+  name "wall2"
+}
+Solid {
+  translation -0.45 0 -1
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.5 0.5 0.5
+        }
+      }
+      geometry Box {
+        size 0.375 0.01 0.1
+      }
+    }
+  ]
+  name "wall1"
+}
+Solid {
+  translation 0 -0.75 0
+  children [
+    Shape {
+      geometry Plane {
+        size 1.25 0.25
+      }
+    }
+  ]
+  name "Trash"
+}
