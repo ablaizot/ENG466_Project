@@ -23,6 +23,7 @@
 #include <webots/led.h>
   
 #include <webots/supervisor.h> 
+#include "../epuck_crown/move.h"
 
 #include "../auct_super/message.h" 
 #define MAX_SPEED_WEB      6.28    // Maximum speed webots
@@ -32,19 +33,11 @@ WbDeviceTag leds[10];
 
 
 #define DEBUG 1
-#define TIME_STEP           64      // Timestep (ms)
 #define RX_PERIOD           2    // time difference between two received elements (ms) (1000)
-
-#define AXLE_LENGTH         0.052   // Distance between wheels of robot (meters)
-#define SPEED_UNIT_RADS     0.00628 // Conversion factor from speed unit to radian per second
-#define WHEEL_RADIUS        0.0205  // Wheel radius (meters)
-#define DELTA_T             (TIME_STEP/1000.0)   // Timestep (seconds)
-#define MAX_SPEED         800     // Maximum speed
 
 #define INVALID          -999
 #define BREAK            -999 //for physics plugin
 
-#define NUM_ROBOTS 5 // Change this also in the supervisor!
 #define EVENT_RANGE (0.1)
 
 #define MAX_WORK_TIME (120.0*1000) // 120s of maximum work time
@@ -60,15 +53,6 @@ WbDeviceTag leds[10];
 /* Collective decision parameters */
 
 #define STATECHANGE_DIST 500   // minimum value of all sensor inputs combined to change to obstacle avoidance mode
-
-typedef enum {
-    STAY            = 1,
-    GO_TO_GOAL      = 2,                    // Initial state aliases
-    OBSTACLE_AVOID  = 3,
-    RANDOM_WALK     = 4,
-    DOING_TASK      = 5,
-    DISABLED        = 6,
-} robot_state_t;
 
 #define DEFAULT_STATE (STAY)
 
@@ -114,13 +98,6 @@ double rnd(void) {
   return ((double)rand())/((double)RAND_MAX);
 }
 
-void limit(int *number, int limit) {
-    if (*number > limit)
-        *number = limit;
-    if (*number < -limit)
-        *number = -limit;
-}
-
 double dist(double x0, double y0, double x1, double y1) {
     return sqrt((x0-x1)*(x0-x1) + (y0-y1)*(y0-y1));
 }
@@ -140,6 +117,8 @@ static void receive_updates()
 {
     message_t msg;
     int target_list_length = 0;
+    int all_targets_length = 0;
+    while(round(all_targets[all_targets_length][2]) != INVALID){ all_targets_length++;}
     int i;
     int k;
 
@@ -204,9 +183,25 @@ static void receive_updates()
                     target[target_list_length+1][2] = INVALID;
                 }
             }
+            for(i=0; i<all_targets_length; i++)
+            {
+                if((int)round(all_targets[i][2]) == msg.event_id) 
+                { //look for correct id (in case wrong event was done first)
+                     for(; i<=all_targets_length; i++)
+                    { //push list to the left from event index
+                        all_targets[i][0] = all_targets[i+1][0];
+                        all_targets[i][1] = all_targets[i+1][1];
+                        all_targets[i][2] = all_targets[i+1][2];
+                        all_targets[i][3] = all_targets[i+1][3];
+                    }
+                }
+            }
             // adjust target list length
             if(target_list_length-1 == 0) target_valid = 0; //used in general state machine 
-            target_list_length = target_list_length-1;    
+            target_list_length = target_list_length-1;
+            
+
+
         }
         else if(msg.event_state == MSG_EVENT_WON)
         {
@@ -239,8 +234,7 @@ static void receive_updates()
             all_targets[msg.event_index][2] = msg.event_id % 10;
             all_targets[msg.event_index][3] = msg.event_type; // mark as active
 
-            while(round(all_targets[i][2]) != INVALID){ i++;}
-            int all_targets_length = i;
+
             
             // Set the target to the closest target assuming no other tasks
             // Calculate bid based on distance + completion time
@@ -495,82 +489,6 @@ void update_state(int _sum_distances)
     }
     
     prev_state = state;
-}
-
-// Odometry
-void update_self_motion(int msl, int msr) {
-    double theta = my_pos[2];
-  
-    // Compute deltas of the robot
-    double dr = (double)msr * SPEED_UNIT_RADS * WHEEL_RADIUS * DELTA_T;
-    double dl = (double)msl * SPEED_UNIT_RADS * WHEEL_RADIUS * DELTA_T;
-    double du = (dr + dl)/2.0;
-    double dtheta = (dr - dl)/AXLE_LENGTH;
-  
-    // Compute deltas in the environment
-    double dx = du * cosf(theta);
-    double dy = du * sinf(theta);
-  
-    // Update position
-    my_pos[0] += dx;
-    my_pos[1] -= dy;
-    my_pos[2] -= dtheta;
-    
-    // Keep orientation within 0, 2pi
-    if (my_pos[2] > 2*M_PI) my_pos[2] -= 2.0*M_PI;
-    if (my_pos[2] < 0) my_pos[2] += 2.0*M_PI;
-
-    // Keep track of highest velocity for modelling
-    double velocity = du * 1000.0 / (double) TIME_STEP;
-    if (state == GO_TO_GOAL && velocity > stat_max_velocity)
-        stat_max_velocity = velocity;
-}
-
-
-// Compute wheel speed to avoid obstacles
-void compute_avoid_obstacle(int *msl, int *msr, int distances[]) 
-{
-    int d1=0,d2=0;       // motor speed 1 and 2     
-    int sensor_nb;       // FOR-loop counters    
-
-    for(sensor_nb=0;sensor_nb<NB_SENSORS;sensor_nb++)
-    {   
-       d1 += (distances[sensor_nb]-300) * Interconn[sensor_nb];
-       d2 += (distances[sensor_nb]-300) * Interconn[sensor_nb + NB_SENSORS];
-    }
-    d1 /= 80; d2 /= 80;  // Normalizing speeds
-
-    *msr = d1+BIAS_SPEED; 
-    *msl = d2+BIAS_SPEED; 
-    limit(msl,MAX_SPEED);
-    limit(msr,MAX_SPEED);
-}
-
-// Computes wheel speed to go towards a goal
-void compute_go_to_goal(int *msl, int *msr) 
-{
-    // // Compute vector to goal
-    float a = target[0][0] - my_pos[0];
-    float b = target[0][1] - my_pos[1];
-    // Compute wanted position from event position and current location
-    float x =  a*cosf(my_pos[2]) - b*sinf(my_pos[2]); // x in robot coordinates
-    float y =  a*sinf(my_pos[2]) + b*cosf(my_pos[2]); // y in robot coordinates
-
-    float Ku = 0.2;   // Forward control coefficient
-    float Kw = 10.0;  // Rotational control coefficient
-    float range = 1; //sqrtf(x*x + y*y);   // Distance to the wanted position
-    float bearing = atan2(y, x);     // Orientation of the wanted position
-    
-    // Compute forward control
-    float u = Ku*range*cosf(bearing);
-    // Compute rotational control
-    float w = Kw*range*sinf(bearing);
-    
-    // Convert to wheel speeds!
-    *msl = 50*(u - AXLE_LENGTH*w/2.0) / WHEEL_RADIUS;
-    *msr = 50*(u + AXLE_LENGTH*w/2.0) / WHEEL_RADIUS;
-    limit(msl,MAX_SPEED);
-    limit(msr,MAX_SPEED);
 }
 
 // RUN e-puck

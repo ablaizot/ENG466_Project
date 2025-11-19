@@ -10,4 +10,4 @@ build/release/short_range_epuck.o: short_range_epuck.c \
  C:\Users\aymer\AppData\Local\Programs\Webots/include/controller/c/webots/led.h \
  C:\Users\aymer\AppData\Local\Programs\Webots/include/controller/c/webots/supervisor.h \
  C:\Users\aymer\AppData\Local\Programs\Webots/include/controller/c/webots/contact_point.h \
- ../auct_super/message.h
+ ../epuck_crown/move.h ../auct_super/message.h

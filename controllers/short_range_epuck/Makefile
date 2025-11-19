@@ -35,7 +35,7 @@
 ###
 ### ---- C Sources ----
 ### if your program uses several C source files:
-### C_SOURCES = my_plugin.c my_clever_algo.c my_graphics.c
+C_SOURCES = short_range_epuck.c ../epuck_crown/move.c
 ###
 ### ---- C++ Sources ----
 ### if your program uses several C++ source files:
