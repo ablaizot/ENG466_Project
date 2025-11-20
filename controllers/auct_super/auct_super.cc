@@ -69,7 +69,7 @@ double gauss(void)
 
 double rand_coord() {
   // return -1.0 + 2.0*RAND;
-  return -0.6225+1.2*RAND;
+  return -1.1/2.0+1.1*RAND;
 }
 
 double expovariate(double mu) {
