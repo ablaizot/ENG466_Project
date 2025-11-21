@@ -104,7 +104,7 @@ void compute_go_to_goal(int *msl, int *msr)
 }
 
 // Odometry
-void update_self_motion(int msl, int msr) {
+double update_self_motion(int msl, int msr) {
     double theta = my_pos[2];
   
     // Compute deltas of the robot
@@ -136,6 +136,6 @@ void update_self_motion(int msl, int msr) {
     
     if (state == GO_TO_GOAL && velocity > stat_max_velocity)
         stat_max_velocity = velocity;
-
+    return velocity;
     
 }
