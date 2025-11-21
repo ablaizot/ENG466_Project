@@ -31,4 +31,6 @@ typedef struct {
   uint16_t event_id; // id of the event the bid is for
   double value; // value of the bid (estimated distance)
   int event_index;
+  double event_x;
+  double event_y;
 } bid_t;

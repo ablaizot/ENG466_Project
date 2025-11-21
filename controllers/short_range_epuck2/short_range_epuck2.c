@@ -214,9 +214,8 @@ static void receive_updates()
         // communication should be on specific channel per robot
         // channel = robot_id + 1, channel 0 reserved for physics plguin
         if(msg.robot_id != robot_id) {
-            fprintf(stderr, "Invalid message: robot_id %d "  "doesn't match receiver %d\n", msg.robot_id, robot_id);
-            //return;
-            exit(1);
+            //fprintf(stderr, "Warning: robot_id %d doesn't match receiver %d, skipping message\n", msg.robot_id, robot_id);
+            continue; // Skip this message instead of crashing
         }
 
         //find target list length
@@ -264,7 +263,23 @@ static void receive_updates()
                     target_list_length = target_list_length-1;    
                 }
             }
+
             // adjust target list length
+
+            // do the same for target bids
+            for(i=0; i<10; i++)
+            {
+                if(target_bids[i].event_id == msg.event_id)
+                {
+                    for(; i<9; i++)
+                    {
+                        target_bids[i] = target_bids[i+1];
+                    }
+                    target_bids[9].event_id = INVALID;
+                    break;
+                }
+            }            
+
         }
         else if(msg.event_state == MSG_EVENT_WON)
         {
@@ -283,7 +298,9 @@ static void receive_updates()
         }
         // check if new event is being auctioned
         else if(msg.event_state == MSG_EVENT_NEW)
-        {           
+        {          
+            
+            
             
             
             // ///*** BEST TACTIC ***///
@@ -330,31 +347,6 @@ static void receive_updates()
 
             double task_time = RATE_OF_MOVEMENT * d + completion_time;
 
-            // Create a new bid with the task time
-            bid_t new_bid = {robot_id, msg.event_id, task_time, indx};
-
-            // Find position to insert based on task_time (ascending order)
-            int insert_pos = 0;
-            for (i = 0; i < 10; i++) {
-                if (target_bids[i].event_id == INVALID) {
-                    insert_pos = i;
-                    break;
-                }
-                if (target_bids[i].value > task_time) {
-                    insert_pos = i;
-                    break;
-                }
-                insert_pos = i + 1;
-            }
-
-            // Shift bids to the right to make space
-            for (i = 9; i > insert_pos; i--) {
-                target_bids[i] = target_bids[i-1];
-            }
-
-            // Insert the new bid at the correct position
-            target_bids[insert_pos] = new_bid;
-
             // don't bid if waiting is better
             if (calculate_time_value(task_time) > 1)
                 task_time = 1.0/0.0;
@@ -364,18 +356,42 @@ static void receive_updates()
                 task_time = 1.0/0.0;
             
 
+            // Create a new bid with the task time
+            bid_t new_bid = {robot_id, msg.event_id, task_time, indx, msg.event_x, msg.event_y};
+            printf("Robot %d calculated bid for event %d with value %.2f\n", robot_id, new_bid.event_id, new_bid.value);
+
+            // Find position to insert based on task_time (ascending order)
+            int insert_pos = 0;
+            for (i = 0; i < 10; i++) {
+                if (target_bids[i].event_id == INVALID) {
+                    insert_pos = i;
+                    break;
+                }
+                if (target_bids[i].value > task_time || target_bids[i].value < 0) {
+                    insert_pos = i;
+                    break;
+                }
+                insert_pos = i + 1;
+            }
+
+            // Shift bids to the right to make space (only if not at end)
+            if (insert_pos < 10) {
+                for (i = 9; i > insert_pos; i--) {
+                    target_bids[i] = target_bids[i-1];
+                }
+                // Insert the new bid at the correct position
+                target_bids[insert_pos] = new_bid;
+            }
             
-            const bid_t my_bid = {robot_id, msg.event_id, task_time, indx};
-            if(target_bids[indx].value > task_time || target_bids[indx].value == -1)
-                target_bids[indx] = my_bid;
-            // Send my bid to the supervisor
-            // print bid
-            //printf("Robot %d bidding %.2f for event %d at index %d\n", robot_id, d, msg.event_id, indx);
-        
-            wb_emitter_set_channel(emitter_tag, robot_id+1);
-            wb_emitter_send(emitter_tag, &my_bid, sizeof(bid_t));
-            // print emmitter channel
-            //printf("Sent bid from robot %d on channel %d\n", robot_id, wb_emitter_get_channel(emitter_tag));            
+            // Only set target if we have a valid bid at position 0
+            if (target_bids[0].event_id != INVALID && target_bids[0].value >= 0) {
+                printf("Robot %d is targeting event %d with bid value %.2f\n", robot_id, target_bids[0].event_id, target_bids[0].value);
+                target[0][0] = target_bids[0].event_x;
+                target[0][1] = target_bids[0].event_y;
+                target[0][2] = round(target_bids[0].event_id);
+                target_valid = 1;
+                printf("Robot %d set target to event %d at (%.2f, %.2f)\n", robot_id, target_bids[0].event_id, target[0][0], target[0][1]);
+            }
         }
     }
     
@@ -410,6 +426,8 @@ static void receive_updates()
             wb_emitter_set_channel(emitter_tag,robot_id+1);      
         }
 }
+
+
 
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
@@ -448,9 +466,14 @@ void reset(void)
         target[i][0] = 0;
         target[i][1] = 0;
         target[i][2] = INVALID;
+        target_bids[i].robot_id = robot_id;
         target_bids[i].event_id = INVALID;
         target_bids[i].value = -1;
+        target_bids[i].event_index = INVALID;
+        target_bids[i].event_x = 0;
+        target_bids[i].event_y = 0;
     }
+
 
     // Start in the DEFAULT_STATE
     state = DEFAULT_STATE;
@@ -563,22 +586,84 @@ void broadcast_targets()
 
     //find target list length
     i = 0;
-    while(round(target[i][2]) != INVALID){ i++;}
-    target_list_length = i;  
+
     
     // Broadcast target list nearby robots channel 1 is the common channel
     wb_emitter_set_channel(local_emitter_tag, COMMON_CHANNEL);
     wb_emitter_set_range(local_emitter_tag, LOCAL_COMMUNICATION_RANGE);
 
-    for(i=0; i<target_list_length;i++)
-    {
-        bid_t msg;  
-        msg.robot_id = robot_id; // sender id
-        msg.event_id = round(target[i][2]); // event id
-        msg.value = 0;
-        msg.event_index = i; // index in my target list
-        wb_emitter_send(local_emitter_tag, &msg, sizeof(bid_t));
-    }    
+
+    // broadcast target bids
+    for (i = 0; i < 10; i++) {
+        if (target_bids[i].event_id != INVALID && target_bids[i].value >= 0) {
+            wb_emitter_send(local_emitter_tag, &target_bids[i], sizeof(bid_t));
+            //printf("Robot %d broadcasted bid for event %d with value %.2f\n", robot_id, target_bids[i].event_id, target_bids[i].value);
+        }
+    }
+    
+
+}
+
+void receive_local_bids()
+{
+    bid_t received_bid;
+    int i, j;
+    
+    // Check for messages on the local/common channel
+    while (wb_receiver_get_queue_length(local_receiver_tag) > 0) {
+        const bid_t *pbid = wb_receiver_get_data(local_receiver_tag);
+        
+        // Save a copy, cause wb_receiver_next_packet invalidates the pointer
+        memcpy(&received_bid, pbid, sizeof(bid_t));
+        wb_receiver_next_packet(local_receiver_tag);
+        
+        // Ignore our own bids
+        if (received_bid.robot_id == robot_id) {
+            continue;
+        }
+        
+        // printf("Robot %d received bid from robot %d for event %d with value %.2f\n", 
+        //        robot_id, received_bid.robot_id, received_bid.event_id, received_bid.value);
+        
+        // Check if this bid is for an event we're also bidding on
+        for (i = 0; i < 10; i++) {
+            if (target_bids[i].event_id == received_bid.event_id && target_bids[i].event_id != INVALID) {
+                // Found matching event
+                
+                // If the other robot has a better (lower) bid, we should give up this event
+                if (received_bid.value < target_bids[i].value && received_bid.value >= 0) {
+                    printf("Robot %d: Other robot %d has better bid (%.2f < %.2f) for event %d, removing from my list\n",
+                           robot_id, received_bid.robot_id, received_bid.value, target_bids[i].value, received_bid.event_id);
+                    
+                    // Remove this bid from our list by shifting remaining bids left
+                    for (j = i; j < 9; j++) {
+                        target_bids[j] = target_bids[j + 1];
+                    }
+                    target_bids[9].event_id = INVALID;
+                    target_bids[9].value = -1;
+                    
+                    // If this was our current target (position 0), update target to next best bid
+                    if (i == 0) {
+                        if (target_bids[0].event_id != INVALID && target_bids[0].value >= 0) {
+                            printf("Robot %d switching to next best bid: event %d with value %.2f\n",
+                                   robot_id, target_bids[0].event_id, target_bids[0].value);
+                            target[0][0] = target_bids[0].event_x;
+                            target[0][1] = target_bids[0].event_y;
+                            target[0][2] = round(target_bids[0].event_id);
+                            target_valid = 1;
+                        } else {
+                            // No more valid bids, clear target
+                            target[0][2] = INVALID;
+                            target_valid = 0;
+                            printf("Robot %d has no more valid bids\n", robot_id);
+                        }
+                    }
+                    
+                    break; // Exit the loop since we found and handled the matching event
+                }
+            }
+        }
+    }
 }
 
 void run(int ms)
@@ -600,6 +685,9 @@ void run(int ms)
     }*/
 
     broadcast_targets();
+
+    // Listen to bids from other robots on common channel
+    receive_local_bids();
 
     // Get info from supervisor
     receive_updates();
@@ -641,6 +729,8 @@ void run(int ms)
             printf("Invalid state: robot_id %d \n", robot_id);
     }
     // Set the speed
+    
+    //printf("Robot %d speeds %d, %d\n", robot_id, msl, msr);
     msl_w = msl*MAX_SPEED_WEB/1000;
     msr_w = msr*MAX_SPEED_WEB/1000;
     wb_motor_set_velocity(left_motor, msl_w);
@@ -649,12 +739,13 @@ void run(int ms)
 
     if (state != STAY && state != DISABLED) {
         worked_time += ms;
-        //printf("Worked for %0.2f \n", worked_time);
+        //printf("Worked for %d \n", worked_time);
     }
 
     // Update clock
     clock += ms;
 }
+
 
 // MAIN
 int main(int argc, char **argv) 
