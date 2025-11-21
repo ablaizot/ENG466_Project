@@ -4,3 +4,4 @@
 *.exe
 controllers/epuck_crown/build
 controllers/auct_super/build
+tmp
