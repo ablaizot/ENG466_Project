@@ -35,8 +35,6 @@ WbDeviceTag leds[10];
 #define DEBUG 1
 #define RX_PERIOD           2    // time difference between two received elements (ms) (1000)
 
-
-
 #define INVALID          -999
 #define BREAK            -999 //for physics plugin
 
@@ -50,18 +48,9 @@ WbDeviceTag leds[10];
 
 #define AVG_TASK_PER_SECOND (20.0/(MAX_SIMULATION_TIME*NUM_ROBOTS)*1000)
 
-
-/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
-/* Collective decision parameters */
-
 #define STATECHANGE_DIST 120   // minimum value of all sensor inputs combined to change to obstacle avoidance mode
 
-
-
 #define DEFAULT_STATE (STAY)
-
-/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
-/* e-Puck parameters */
 
 #define NB_SENSORS           8
 #define BIAS_SPEED           400
@@ -70,6 +59,7 @@ WbDeviceTag leds[10];
 // NOTE: Weights from reynolds2.h
 int Interconn[16] = {17,29,34,10,8,-38,-56,-76,-72,-58,-36,8,10,36,28,18};
 
+FILE *stat_file;
 
 // The state variables
 int clock;
@@ -84,6 +74,11 @@ int indx;                   // Event index to be sent to the supervisor
 float buff[99];             // Buffer for physics plugin
 
 double stat_max_velocity;
+int stat_moving_time = 0;
+int stat_avoiding_time = 0;
+int stat_task_time = 0;
+int stat_idle_time = 0;
+
 int worked_time = 0;
 
 // Proximity and radio handles
@@ -240,6 +235,11 @@ static void receive_updates()
             wb_motor_set_velocity(left_motor, 0);
             wb_motor_set_velocity(right_motor, 0);
             wb_robot_step(TIME_STEP);
+            
+            fprintf(stat_file,"TERMINATED %d;%d;%d;%d\n",stat_moving_time, stat_avoiding_time, stat_task_time, stat_idle_time);
+    
+            fclose(stat_file);
+    
             exit(0);
         }
         else if(msg.event_state == MSG_EVENT_DONE)
@@ -452,10 +452,6 @@ void reset(void)
 
 void update_state(int *distances)
 {
-    // compute distance to goal
-    float a = target[0][1] - my_pos[0];
-    float b = target[0][1] - my_pos[1];
-    float task_dist = sqrt(a*a + b*b);
     int obstacle_detected_now = 0;
     
     wb_led_set(leds[8], 0);
@@ -536,11 +532,13 @@ void run(int ms)
         case STAY:
             msl = 0;
             msr = 0;
+            stat_idle_time += ms;
             break;
 
         case DOING_TASK:
             msl = 0;
             msr = 0;
+            stat_task_time += ms;
             break;
 
         case DISABLED:
@@ -550,10 +548,12 @@ void run(int ms)
 
         case GO_TO_GOAL:
             compute_go_to_goal(&msl, &msr);
+            stat_moving_time += ms;
             break;
 
         case OBSTACLE_AVOID:
             compute_avoid_obstacle(&msl, &msr, distances);
+            stat_avoiding_time += ms;
             break;
 
         case RANDOM_WALK:
@@ -571,7 +571,7 @@ void run(int ms)
     msr_w = msr*MAX_SPEED_WEB/1000;
     wb_motor_set_velocity(left_motor, msl_w);
     wb_motor_set_velocity(right_motor, msr_w);
-    update_self_motion(msl, msr);
+    double velocity = update_self_motion(msl, msr);
 
     if (state != STAY && state != DISABLED) {
         worked_time += ms;
@@ -580,6 +580,10 @@ void run(int ms)
 
     // Update clock
     clock += ms;
+    
+    if (clock % 1024 == 0) {
+      fprintf(stat_file,"%d/%d; %f\n",worked_time, clock, velocity);
+    }
 }
 
 
@@ -588,9 +592,16 @@ int main(int argc, char **argv)
 {
     reset();
   
+    char filename[64];
+    sprintf(filename, "../../tmp/robot%d.txt", robot_id);
+    stat_file = fopen(filename, "a");
+
+    
     // RUN THE MAIN ALGORIHM
     while (wb_robot_step(TIME_STEP) != -1) {run(TIME_STEP);}
+
     wb_robot_cleanup();
+
 
     return 0;
 }

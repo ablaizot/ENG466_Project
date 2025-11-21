@@ -24,6 +24,6 @@ typedef enum {
 
 void compute_avoid_obstacle(int *msl, int *msr, int distances[]);
 void compute_go_to_goal(int *msl, int *msr);
-void update_self_motion(int msl, int msr);
+double update_self_motion(int msl, int msr);
 
 
