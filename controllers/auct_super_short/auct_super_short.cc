@@ -226,10 +226,7 @@ private:
     // print new event with event type 0 = type A, 1 = type B
     printf("N event %d added at (%.2f, %.2f) of type %d\n", 
       events_.back()->id_, events_.back()->pos_.x, events_.back()->pos_.y,
-      events_.back()->task_type_);
-    
-
-    
+      events_.back()->task_type_);    
   }
 
   // Init robot and get robot_ids and receivers
@@ -502,10 +499,11 @@ public:
     // ** Add a random new event, if the time has come
     if (num_active_events_ < NUM_ACTIVE_EVENTS) {
       addEvent();
-        event->t_announced_ = clock_;
-        event->t_waiting_ = -1;
-        event_queue.emplace_back(event.get(), MSG_EVENT_NEW);
-        printf("A event %d announced\n", event->id_); 
+      Event* event = events_.back().get();
+      event->t_announced_ = clock_;
+      event->t_waiting_ = -1;
+      event_queue.emplace_back(event, MSG_EVENT_NEW);
+      printf("A event %d announced\n", event->id_);
     }
 
     // Check if there are any new events to announce
