@@ -35,7 +35,7 @@
 ###
 ### ---- C Sources ----
 ### if your program uses several C source files:
-C_SOURCES = epuck_crown.c move.c 
+C_SOURCES = short_range_epuck.c ../epuck_crown/move.c
 ###
 ### ---- C++ Sources ----
 ### if your program uses several C++ source files:

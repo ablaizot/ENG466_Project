@@ -28,3 +28,31 @@
 - All tasks have utility of one
 - value of buying a task with $t$ time to complete $1-u_{0}t$ from current trajectory
 - value of selling a task will reduce completion time by $\Delta t$: $u_{0}\Delta t-1$
+
+
+# Suggestion of task allocation setup
+
+1. Initialize for each robot:
+    1. A target list $\mathbf{p}_i = \{ p_{i1}, p_{i2}, p_{i3} \}$, ordered after how the robot plans to complete the tasks.
+    2. A bundle list $\mathbf{b}_i = \{ b_{i1}, b_{i2}, b_{i3} \}$, ordered by when it bid on the task. So that task 1 was added before 2. 
+    3. A list of winning robots $\mathbf{z}_i = \{z_{i1}, \ldots, z_{in_t} \}$  where $n_t$ is the total number of events and $z_{ij}$ is who robot i believes is winning the task j.  -1 equals that no one is winning. This will not be static in size. 
+    4. A list of winning bids $\mathbf{y}_i = \{y_{i1}, \ldots, y_{in_t} \}$  where $y_{ij}$  is what robot i believes is teh best bid on task j by winner $z_{ij}$.  -inf means no one is winning. 
+    5. A list of timestamps $\mathbf{s}_i = \{s_{i1}, \ldots, s_{in_r} \}$ , where $n_r$  is the number or robots and $s_{ik}$ is the timestamp that robot i communicated with robot j.
+2. Create bundle:
+    1. Greedy bidding for target list. The bid is calculated the same way as before and the bid is compared to the value in y. 
+3. Consensus: 
+    1. Send lists z, y to neighbouring robots and recieves theirs. 
+    2. Update the information after what the highest bids are in the y. If robot i has assigned it self to a task which has a better bidder, all tasks after tha b has to be reallocated. with the bundle creating loop. 
+    3. Update the time stamp of communication in s. 
+
+So the robots initially is in bundle phase and then enters it if :
+
+- Completed event.
+- New event is created ?
+- Conflict in consesus.
+
+The robot enters consensus phase if:
+
+- If within communication range of another robot and timestamp ie enough long ago
+
+[https://arxiv.org/pdf/1806.04836](https://arxiv.org/pdf/1806.04836)

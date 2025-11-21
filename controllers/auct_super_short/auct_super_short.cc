@@ -13,6 +13,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <cmath>
+#include <map>
 
 #include <vector>
 #include <memory>
@@ -42,7 +43,7 @@ using namespace std;
 #define WAITING_TIMEOUT (10000)   // ticks until an event auction runs out
 #define EVENT_GENERATION_DELAY (1000) // average time between events ms (expo distribution)
 
-#define GPS_INTERVAL (200)
+#define GPS_INTERVAL (500)
 
 // Parameters that can be changed
 #define NUM_ROBOTS 5                 // Change this also in the epuck_crown.c!
@@ -69,7 +70,7 @@ double gauss(void)
 
 double rand_coord() {
   // return -1.0 + 2.0*RAND;
-  return -1.1/2.0+1.1*RAND;
+  return -0.6225+1.2*RAND;
 }
 
 double expovariate(double mu) {
@@ -88,7 +89,7 @@ public:
   WbNodeRef node_;       //event node ref
   uint16_t assigned_to_; //id of the robot that will handle this event
   uint8_t task_type_;    //type of task 0 is type A, 1 is type B
-  uint16_t time_in_range_; //time the robot has been in range of the event
+  map<uint16_t, uint16_t> robot_time_in_range_; // Track time in range per robot
 
   // Auction data
   uint64_t t_announced_;        //time at which event was announced to robots
@@ -109,7 +110,11 @@ public:
     g_event_nodes_free.pop_back();
     // Randomly assign task type 0 or 1 with 1/3 type 0 and 2/3 type 1
     task_type_ = (rand() % 3 == 0) ? 0 : 1;
-    time_in_range_ = 0;
+    
+    for (uint16_t i = 0; i < NUM_ROBOTS; i++) {
+      robot_time_in_range_[i] = 0;
+    }
+
     WbFieldRef children_field = wb_supervisor_node_get_field(node_, "children");
     WbNodeRef child = wb_supervisor_field_get_mf_node(children_field, 0);
     WbFieldRef appearance_field = wb_supervisor_node_get_field(child, "appearance");
@@ -223,6 +228,8 @@ private:
       events_.back()->id_, events_.back()->pos_.x, events_.back()->pos_.y,
       events_.back()->task_type_);
     
+
+    
   }
 
   // Init robot and get robot_ids and receivers
@@ -301,84 +308,86 @@ private:
   // An odd number robot takes 5 second to do a type B task, even number robot takes 1 second to do type B task
   void markEventsDone(event_queue_t& event_queue) {
     for (auto& event : events_) {
-        if (!event->is_assigned() || event->is_done())
-            continue;
-        
-        const double *robot_pos = getRobotPos(event->assigned_to_);
-        Point2d robot_pos_pt(robot_pos[0], robot_pos[1]);
-        double dist = event->pos_.Distance(robot_pos_pt);
+        // if (!event->is_assigned() || event->is_done())
+        //     continue;
+        for (int i=0; i<NUM_ROBOTS; ++i) {
+            const double *robot_pos = getRobotPos(i);
+            // Get robot position of all robots and check distance
+            Point2d robot_pos_pt(robot_pos[0], robot_pos[1]);
+            double dist = event->pos_.Distance(robot_pos_pt);
 
-        if (dist <= EVENT_RANGE) {
-            // Get task completion time based on robot ID and task type
-            uint64_t completion_time;
-            bool is_even_robot = (event->assigned_to_ % 2 == 0);
-            
-            if (event->task_type_ == 0) { // Type A task
-                completion_time = is_even_robot ? 9000: 3000; // 3 or 9 seconds in ms
-            } else { // Type B task
-                completion_time = is_even_robot ? 1000: 5000; // 5 or 1 seconds in ms
-            }
+          if (dist <= EVENT_RANGE) {
+              // Get task completion time based on robot ID and task type
+              uint64_t completion_time;
+              bool is_even_robot = (i % 2 == 0);
+              
+              if (event->task_type_ == 0) { // Type A task
+                  completion_time = is_even_robot ? 9000: 3000; // 3 or 9 seconds in ms
+              } else { // Type B task
+                  completion_time = is_even_robot ? 1000: 5000; // 5 or 1 seconds in ms
+              }
 
-            // Increment time in range
-            event->time_in_range_ += STEP_SIZE;
-            
-            // Check if robot has been in range long enough
-            if (event->time_in_range_ >= completion_time) {
-                printf("D robot %d completed event %d after %u ms in range\n", 
-                    event->assigned_to_, event->id_, event->time_in_range_);
-                num_events_handled_++;
-                event->markDone(clock_);
-                num_active_events_--;
-                event_queue.emplace_back(event.get(), MSG_EVENT_DONE);
-                restartWaitingEvents(event_queue);
-            }
-        } else {
-            // Reset time in range if robot moves out of range
-            event->time_in_range_ = 0;
+              // Increment time in range
+              event->robot_time_in_range_[i] += STEP_SIZE;
+              
+              // Check if robot has been in range long enough
+              if (event->robot_time_in_range_[i] >= completion_time) {
+                  printf("D robot %d completed event %d after %u ms in range\n", 
+                      i, event->id_, event->robot_time_in_range_[i]);
+                  num_events_handled_++;
+                  event->markDone(clock_);
+                  num_active_events_--;
+                  event_queue.emplace_back(event.get(), MSG_EVENT_DONE);
+                  restartWaitingEvents(event_queue);
+              }
+          } else {
+              // Reset time in range if robot moves out of range
+              event->robot_time_in_range_[i] = 0;
+          }
         }
     }
   }
 
-  void handleAuctionEvents(event_queue_t& event_queue) {
-    // For each unassigned event
-    for (auto& event : events_) {
-      if (event->is_assigned()) continue;
+  // void handleAuctionEvents(event_queue_t& event_queue) {
+  //   // For each unassigned event
+  //   for (auto& event : events_) {
+  //     if (event->is_assigned()) continue;
 
-      if (event->is_waiting() && clock_ - event->t_waiting_ <= WAITING_TIMEOUT) continue; // announce again if waiting too long
+  //     if (event->is_waiting() && clock_ - event->t_waiting_ <= WAITING_TIMEOUT) continue; // announce again if waiting too long
 
-      // Send announce, if new
-      // IMPL DETAIL: Only allow one auction at a time.
-      if ((!event->was_announced()) && !auction) {
-        event->t_announced_ = clock_;
-        event->t_waiting_ = -1;
-        event_queue.emplace_back(event.get(), MSG_EVENT_NEW); 
-        auction = event.get();
-        printf("A event %d announced\n", event->id_);
+  //     // Send announce, if new
+  //     // IMPL DETAIL: Only allow one auction at a time.
+  //     if ((!event->was_announced()) && !auction) {
+  //       event->t_announced_ = clock_;
+  //       event->t_waiting_ = -1;
+  //       event_queue.emplace_back(event.get(), MSG_EVENT_NEW); 
+  //       auction = event.get();
+  //       printf("A event %d announced\n", event->id_);
 
-      // End early or restart, if timed out
-      } else if (clock_ - event->t_announced_ > EVENT_TIMEOUT && event->was_announced()) {
-        // End early if we have any bids at all
-        if (event->has_bids() && !isinf(event->best_bid_)) {
-          // IMPLEMENTATION DETAIL: If about to time out, assign to
-          // the highest bidder or restart the auction if there is none.
-          event->assigned_to_ = event->best_bidder_;
-          event_queue.emplace_back(event.get(), MSG_EVENT_WON); // FIXME?
-          auction = NULL;
+  //     // End early or restart, if timed out
+  //     } else if (clock_ - event->t_announced_ > EVENT_TIMEOUT && event->was_announced()) {
+  //       // End early if we have any bids at all
+  //       if (event->has_bids() && !isinf(event->best_bid_)) {
+  //         // IMPLEMENTATION DETAIL: If about to time out, assign to
+  //         // the highest bidder or restart the auction if there is none.
+  //         event->assigned_to_ = event->best_bidder_;
+  //         event_queue.emplace_back(event.get(), MSG_EVENT_WON); // FIXME?
+  //         auction = NULL;
           
-          printf("W robot %d won event %d\n", event->assigned_to_, event->id_);
+  //         printf("W robot %d won event %d\n", event->assigned_to_, event->id_);
 
-        // Restart (incl. announce) if no bids
-        } else {
-          // (reannounced in next iteration)
-          event->restartAuction();
-          event->t_waiting_ = clock_;
-          printf("Auction for event %d failed, set to wait\n", event->id_);
-          if (auction == event.get())
-            auction = NULL;
-        }
-      }
-    }
-  }
+  //       // Restart (incl. announce) if no bids
+  //       } else {
+  //         // (reannounced in next iteration)
+  //         event->restartAuction();
+  //         event->t_waiting_ = clock_;
+  //         printf("Auction for event %d failed, set to wait\n", event->id_);
+  //         if (auction == event.get())
+  //           auction = NULL;
+  //       }
+  //     }
+  //   }
+  // }
 
   void restartWaitingEvents(event_queue_t& event_queue) {
     // For each waiting event
@@ -390,37 +399,37 @@ private:
     }
   }
 
-  void handleRobotBiddings(event_queue_t& event_queue) {
-    // Send and receive messages
-    bid_t* pbid; // inbound
-    for (int i=0;i<NUM_ROBOTS;i++) {
-      // Check if we're receiving data
-      if (wb_receiver_get_queue_length(receivers_[i]) > 0) {
-        //printf("Receiving bid from robot %d\n", i);
-        assert(wb_receiver_get_queue_length(receivers_[i]) > 0);
-        assert(wb_receiver_get_data_size(receivers_[i]) == sizeof(bid_t));
+  // void handleRobotBiddings(event_queue_t& event_queue) {
+  //   // Send and receive messages
+  //   bid_t* pbid; // inbound
+  //   for (int i=0;i<NUM_ROBOTS;i++) {
+  //     // Check if we're receiving data
+  //     if (wb_receiver_get_queue_length(receivers_[i]) > 0) {
+  //       //printf("Receiving bid from robot %d\n", i);
+  //       assert(wb_receiver_get_queue_length(receivers_[i]) > 0);
+  //       assert(wb_receiver_get_data_size(receivers_[i]) == sizeof(bid_t));
         
-        pbid = (bid_t*) wb_receiver_get_data(receivers_[i]); 
-        assert(pbid->robot_id == i);
-        printf("B robot %d bid %.2f for event %d\n", pbid->robot_id,
-          pbid->value, pbid->event_id);
-        Event* event = events_.at(pbid->event_id).get();
-        bool auction_failed = event->updateAuction(pbid->robot_id, pbid->value, pbid->event_index, clock_);
+  //       pbid = (bid_t*) wb_receiver_get_data(receivers_[i]); 
+  //       assert(pbid->robot_id == i);
+  //       printf("B robot %d bid %.2f for event %d\n", pbid->robot_id,
+  //         pbid->value, pbid->event_id);
+  //       Event* event = events_.at(pbid->event_id).get();
+  //       bool auction_failed = event->updateAuction(pbid->robot_id, pbid->value, pbid->event_index, clock_);
 
-        if (auction_failed && auction == event)
-            auction = NULL;
+  //       if (auction_failed && auction == event)
+  //           auction = NULL;
 
-        // TODO: Refactor this (same code above in handleAuctionEvents)
-        if (event->is_assigned()) {
-          event_queue.emplace_back(event, MSG_EVENT_WON);
-          auction = NULL;
-          printf("W robot %d won event %d\n", event->assigned_to_, event->id_);
-        }
+  //       // TODO: Refactor this (same code above in handleAuctionEvents)
+  //       if (event->is_assigned()) {
+  //         event_queue.emplace_back(event, MSG_EVENT_WON);
+  //         auction = NULL;
+  //         printf("W robot %d won event %d\n", event->assigned_to_, event->id_);
+  //       }
 
-        wb_receiver_next_packet(receivers_[i]);
-      }
-    }
-  }
+  //       wb_receiver_next_packet(receivers_[i]);
+  //     }
+  //   }
+  // }
 
   // Calculate total distance travelled by robots
   void statTotalDistance() {
@@ -493,13 +502,17 @@ public:
     // ** Add a random new event, if the time has come
     if (num_active_events_ < NUM_ACTIVE_EVENTS) {
       addEvent();
+        event->t_announced_ = clock_;
+        event->t_waiting_ = -1;
+        event_queue.emplace_back(event.get(), MSG_EVENT_NEW);
+        printf("A event %d announced\n", event->id_); 
     }
 
     // Check if there are any new events to announce
-    handleAuctionEvents(event_queue);
+    //handleAuctionEvents(event_queue);
  
     // Check if robots sent any bids for events and process them
-    handleRobotBiddings(event_queue);
+    //handleRobotBiddings(event_queue);
 
     // outbound
     message_t msg;
@@ -545,7 +558,6 @@ public:
 
     // Time to end the experiment?
     if (MAX_RUNTIME > 0 && clock_ >= MAX_RUNTIME) {
-
       for(int i=0;i<NUM_ROBOTS;i++){
           buildMessage(i, NULL, MSG_QUIT, &msg);
           wb_emitter_set_channel(emitter_, i+1);
@@ -558,15 +570,6 @@ public:
       printf("Handled %d events in %d seconds, events handled per second = %.2f\n",
              num_events_handled_, (int) clock_ / 1000, ehr);
       printf("Performance: %f\n", perf);
-
-      FILE* f = fopen("../../tmp/events_handled.txt","a");
-      fprintf(f,"%d\n",num_events_handled_);
-      fclose(f);
-      
-      FILE* f_ack = fopen("../../tmp/webots_done","w");
-      fprintf(f_ack,"DONE!");
-      fclose(f_ack);
-
       return false;
     } 
     else { return true;} //continue
