@@ -17,7 +17,7 @@ typedef struct {
   double heading; // robot heading
   message_event_state_t event_state;
   // [[ valid if event_state > 0: 
-  uint16_t event_id;
+  int event_id;
   double event_x;
   double event_y;
   int event_type;
@@ -28,10 +28,9 @@ typedef struct {
 // A message sent from a robot to the supervisor
 typedef struct {
   int robot_id; // id of the sender
-  uint16_t event_id; // id of the event the bid is for
+  int event_id; // id of the event the bid is for
   double value; // value of the bid (estimated distance)
-  int event_index;
   double event_x;
   double event_y;
-  int event_type; //needed for greedy route choice
+  int event_type; // for greedy task allocation
 } bid_t;

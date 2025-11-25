@@ -48,7 +48,7 @@ WbDeviceTag leds[10];
 
 #define MAX_WORK_TIME (120.0*1000) // 120s of maximum work time
 #define MAX_SIMULATION_TIME (180.0*1000) // 180s of simulation time
-#define MAX_TASKS 3
+#define MAX_TASKS 1
 #define RATE_OF_MOVEMENT 5.0 // how much time required to travel 1 unit of distance (2 seconds per meter travelled)
 
 #define AVG_TASK_PER_SECOND (20.0/(MAX_SIMULATION_TIME*NUM_ROBOTS)*1000)
@@ -218,7 +218,7 @@ void greedy_route_choice()
             {
                 // Calculate time to perform taks from last x,y position
                 double d = calculate_distance_walls(pos_x, pos_y, target_bids[i].event_x, target_bids[i].event_y);
-                double completion_time = 0.0;
+                double completion_time = 1.0;
 
                 if (target_bids[i].event_type == 0) { // Type A task
                     completion_time = (robot_id % 2 == 0) ? 9 : 3;
@@ -244,6 +244,8 @@ void greedy_route_choice()
         target[targets_added][0] = target_bids[best_idx].event_x;
         target[targets_added][1] = target_bids[best_idx].event_y;
         target[targets_added][2] = target_bids[best_idx].event_id;
+        
+        printf("%d\n", target_bids[best_idx].event_id);
 
         // Update the position to be the one of the added target
         pos_x = target_bids[best_idx].event_x;
@@ -378,6 +380,7 @@ static void receive_updates()
                     insert_pos = i;
                     break;
                 }
+                insert_pos = i+1;
             }
 
             target_bids[insert_pos].event_id = msg.event_id;
@@ -389,7 +392,7 @@ static void receive_updates()
             // Otherwise go to single insertion if new event is announced
             if (!initial_complete)
             {
-                if (msg.event_id < 10)
+                if (msg.event_id < 9)
                 {
                     return;
                 }
@@ -448,7 +451,7 @@ static void receive_updates()
                 task_time = 1.0/0.0;
             
             // Create a new bid with the task time
-            bid_t new_bid = {robot_id, msg.event_id, task_time, indx, msg.event_x, msg.event_y};
+            bid_t new_bid = {robot_id, msg.event_id, task_time, msg.event_x, msg.event_y};
             printf("Robot %d calculated bid for event %d with value %.2f\n", robot_id, new_bid.event_id, new_bid.value);
 
             //Insert new task at best calculated index in target list and in target bids if task time is low enough
@@ -581,7 +584,6 @@ void reset(void)
         target_bids[i].robot_id = robot_id;
         target_bids[i].event_id = INVALID;
         target_bids[i].value = -1;
-        target_bids[i].event_index = INVALID;
         target_bids[i].event_x = 0;
         target_bids[i].event_y = 0;
     }
@@ -708,7 +710,8 @@ void broadcast_targets()
     for (i = 0; i < 10; i++) {
         if (target_bids[i].event_id != INVALID && target_bids[i].value >= 0) {
             wb_emitter_send(local_emitter_tag, &target_bids[i], sizeof(bid_t));
-            //printf("Robot %d broadcasted bid for event %d with value %.2f\n", robot_id, target_bids[i].event_id, target_bids[i].value);
+            printf("Robot %d broadcasted bid for event %d with value %.2f\n", robot_id, target_bids[i].event_id, target_bids[i].value);
+            //printf("Size of bid_t: %zu\n", sizeof(bid_t));
         }
     }
 }
@@ -769,7 +772,6 @@ void receive_local_bids()
                             }
                         }
                     }
-                    break; // Exit for loop when finding match that changes path
 
 
                     /*// If this was our current target (position 0), update target to next best bid
@@ -790,6 +792,7 @@ void receive_local_bids()
                     }*/
                     
                 }
+                break; // Exit for loop when finding match that changes path
             }
         }
     }
