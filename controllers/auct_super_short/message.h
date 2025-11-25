@@ -27,10 +27,11 @@ typedef struct {
 
 // A message sent from a robot to the supervisor
 typedef struct {
-  uint16_t robot_id; // id of the sender
+  int robot_id; // id of the sender
   uint16_t event_id; // id of the event the bid is for
   double value; // value of the bid (estimated distance)
   int event_index;
   double event_x;
   double event_y;
+  int event_type; //needed for greedy route choice
 } bid_t;
