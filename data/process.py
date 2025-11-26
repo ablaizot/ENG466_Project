@@ -1,4 +1,5 @@
 import os
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -132,6 +133,21 @@ def load_robot_file(filename, expected_runs):
     return runs
 
 
+# ------------ PARSE COMMAND LINE ARGUMENTS ------------
+
+if len(sys.argv) != 2:
+    print("Usage: python process.py <mode>")
+    print("  mode: 'normal' or 'short' (for short-range epuck)")
+    sys.exit(1)
+
+mode = sys.argv[1].lower()
+
+if mode not in ['normal', 'short']:
+    print("Error: mode must be 'normal' or 'short'")
+    sys.exit(1)
+
+print(f"=== ANALYZING {mode.upper()} RANGE DATA ===\n")
+
 # ------------ MAIN LOADING LOGIC ------------
 
 events_counts = load_events_counts("events_handled.txt")
@@ -141,6 +157,9 @@ all_robots = {}
 
 for i in range(5):
     robot_file = f"robot{i}.txt"
+
+    if mode == 'short':
+        robot_file = f"short_robot{i}.txt"
     if os.path.exists(robot_file):
         runs = load_robot_file(robot_file, expected_runs)
         all_robots[i] = runs
@@ -201,7 +220,7 @@ print(f"Standard deviation:   {std_tasks:.2f}")
 # CHOOSE RUN
 # -----------------------------------------------------------
 
-run_index = 68  # <--- CHANGE THIS to visualize another run
+run_index = 1  # <--- CHANGE THIS to visualize another run
 
 # Collect work fractions for all robots
 robot_curves = []
@@ -230,7 +249,7 @@ plt.plot(total_working)
 plt.xlabel("Time step (≈1.024 s each)")
 plt.ylabel("Average number of robots working")
 plt.ylim(0, 5.5)  # fixed y-axis range for consistency
-plt.title(f"Run {run_index}: robots working over time — tasks completed = {tasks_completed}")
+plt.title(f"Run {run_index} ({mode} mode): robots working over time — tasks completed = {tasks_completed}")
 plt.grid(True)
 plt.tight_layout()
 plt.show()

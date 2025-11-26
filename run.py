@@ -6,27 +6,50 @@ import tempfile
 import sys
 
 # Path to Webots on Windows
-WEBOTS_PATH = r"C:\Program Files\Webots\msys64\mingw64\bin\webotsw.exe"
+WEBOTS_PATH = r"C:\Users\aymer\AppData\Local\Programs\Webots\msys64\mingw64\bin\webotsw.exe"
 
 def main():
-    if len(sys.argv) != 2:
-        print("Usage: python run_webots_batch.py <number_of_runs>")
+    if len(sys.argv) != 3:
+        print("Usage: python run.py <number_of_runs> <mode>")
+        print("  mode: 'normal' or 'short' (for short-range epuck)")
         sys.exit(1)
 
     runs = int(sys.argv[1])
+    mode = sys.argv[2].lower()
+    
+    if mode not in ['normal', 'short']:
+        print("Error: mode must be 'normal' or 'short'")
+        sys.exit(1)
+    
+    # Select world file based on mode
+    if mode == 'short':
+        world_file = "worlds/project4_thin_short.wbt"
+    else:
+        world_file = "worlds/project4_thin.wbt"
 
     # Use the system temp directory on Windows
     tmp = 'tmp'
-
-    tmp_files = [
-        "events_handled.txt",
-        "robot0.txt",
-        "robot1.txt",
-        "robot2.txt",
-        "robot3.txt",
-        "robot4.txt",
-        "webots_done"
-    ]
+    tmp_files = []
+    if mode == 'short':
+        tmp_files = [
+            "events_handled.txt",
+            "short_robot0.txt",
+            "short_robot1.txt",
+            "short_robot2.txt",
+            "short_robot3.txt",
+            "short_robot4.txt",
+            "webots_done"
+        ]
+    else:
+        tmp_files = [
+            "events_handled.txt",
+            "robot0.txt",
+            "robot1.txt",
+            "robot2.txt",
+            "robot3.txt",
+            "robot4.txt",
+            "webots_done"
+        ]
 
     print("All temporary files will be deleted (if they exist)")
     for f in tmp_files:
@@ -34,7 +57,7 @@ def main():
         if os.path.exists(path):
             os.remove(path)
 
-    print(f"Launching Webots {runs} times in batch mode")
+    print(f"Launching Webots {runs} times in batch mode ({mode} mode)")
 
     for i in range(1, runs + 1):
         print(i)
@@ -45,7 +68,7 @@ def main():
             "--minimize",
             "--mode=fast",
             "--no-rendering",
-            "worlds/project4_thin.wbt"
+            world_file
         ])
 
         done_file = os.path.join(tmp, "webots_done")
