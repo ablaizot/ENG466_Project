@@ -13,6 +13,7 @@
 One task per robot
 - With only one task per robot, the auction is weird. Five tasks will be allocated to robots and the other five will be waiting
 - We have six tasks available, but only one robot that will bid for it. So if will just take the first task offered without thinking.
+
 Three tasks per robot
 - All tasks will be allocated to some robot and there is always enough robot to bid for new tasks that appears.
 
