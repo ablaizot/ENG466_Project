@@ -28,6 +28,7 @@ typedef struct {
 // A message sent from a robot to the supervisor
 typedef struct {
   int robot_id; // id of the sender
+  int winner_id; //id of the winner
   int event_id; // id of the event the bid is for
   double value; // value of the bid (estimated distance)
   double event_x;

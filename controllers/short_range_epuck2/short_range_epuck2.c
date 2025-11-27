@@ -48,7 +48,7 @@ WbDeviceTag leds[10];
 
 #define MAX_WORK_TIME (120.0*1000) // 120s of maximum work time
 #define MAX_SIMULATION_TIME (180.0*1000) // 180s of simulation time
-#define MAX_TASKS 1
+#define MAX_TASKS 3
 #define RATE_OF_MOVEMENT 5.0 // how much time required to travel 1 unit of distance (2 seconds per meter travelled)
 
 #define AVG_TASK_PER_SECOND (20.0/(MAX_SIMULATION_TIME*NUM_ROBOTS)*1000)
@@ -201,15 +201,23 @@ void greedy_route_choice()
         double pos_x = my_pos[0];
         double pos_y = my_pos[1];
 
-    // Reset target array
+    // Find first invalid target so that the 
     for (i = 0; i < MAX_TASKS; i++) 
     {
-        target[i][2] = INVALID;
+        if(target[i][2] == INVALID){
+            targets_added = i; // Set number of initial targets added
+            if (i > 0){        
+                pos_x = target[i-1][0]; //Set curr pos as target before invalid 
+                pos_y = target[i-1][0];
+                added_events[(int)target[i-1][2]] = true;
+            }
+            break;
+        }
     }
 
     while (targets_added < MAX_TASKS) //Continue until all spots assigned
     {
-        double best_task_time = 999; 
+        double best_task_time = 30.0; 
         int best_idx = -1;
 
         for (i = 0; i < 10; i++)
@@ -228,11 +236,14 @@ void greedy_route_choice()
                 }
 
                 double task_time = RATE_OF_MOVEMENT * d + completion_time; //Final which is compared to the previous best task time
-
-                if (task_time < best_task_time) 
+                
+                if (task_time < target_bids[i].value || target_bids[i].winner_id == robot_id)
                 {
-                    best_task_time = task_time; //Update best performin
-                    best_idx = i; //Index in targets bid list
+                    if (task_time < best_task_time) 
+                    {
+                        best_task_time = task_time; //Update best performin
+                        best_idx = i; //Index in targets bid list
+                    }
                 }
             }
         }
@@ -245,7 +256,7 @@ void greedy_route_choice()
         target[targets_added][1] = target_bids[best_idx].event_y;
         target[targets_added][2] = target_bids[best_idx].event_id;
         
-        printf("%d\n", target_bids[best_idx].event_id);
+        //printf("The id of added target %d\n", target_bids[best_idx].event_id);
 
         // Update the position to be the one of the added target
         pos_x = target_bids[best_idx].event_x;
@@ -253,6 +264,8 @@ void greedy_route_choice()
 
         // Update bids in target_bids for the targets actually wanted to complete
         target_bids[best_idx].value = best_task_time;
+        target_bids[best_idx].winner_id = robot_id;
+        
         added_events[best_idx] = true;
         targets_added++; //Next iteration
 
@@ -353,7 +366,7 @@ static void receive_updates()
             }            
 
         }
-        else if(msg.event_state == MSG_EVENT_WON)
+        /*else if(msg.event_state == MSG_EVENT_WON)
         {
             // insert event at index
             for(i=target_list_length; i>=msg.event_index; i--)
@@ -368,9 +381,11 @@ static void receive_updates()
             target_valid = 1; //used in general state machine
             target_list_length = target_list_length+1;
         }
-        // check if new event is being auctioned
+        // check if new event is being auctioned*/
         else if(msg.event_state == MSG_EVENT_NEW)
-        {    
+        {   
+            int i; 
+
             //Insert events in event list without order
             int insert_pos = 0;
             for (i = 0; i < 10; i++) 
@@ -380,13 +395,17 @@ static void receive_updates()
                     insert_pos = i;
                     break;
                 }
-                insert_pos = i+1;
             }
+            
+            //Initially set ourself as winner of event but with value of inifity
 
             target_bids[insert_pos].event_id = msg.event_id;
             target_bids[insert_pos].event_x = msg.event_x;
             target_bids[insert_pos].event_y = msg.event_y;
             target_bids[insert_pos].event_type = msg.event_type;
+            target_bids[insert_pos].robot_id = robot_id;
+            target_bids[insert_pos].winner_id = robot_id;
+            target_bids[insert_pos].value = 1.0/0.0; //inf
 
             // If first ten are complete then start with initial greedy route choice
             // Otherwise go to single insertion if new event is announced
@@ -406,7 +425,7 @@ static void receive_updates()
             indx = 0;
             double d = calculate_distance_walls(my_pos[0], my_pos[1], msg.event_x, msg.event_y);
 
-            uint64_t completion_time;
+            int completion_time;
             if (msg.event_type == 0) {     // Type A task
                 completion_time = (robot_id % 2 == 0) ? 9: 3; // 3 or 9 seconds
             } else {                        // Type B task
@@ -451,14 +470,14 @@ static void receive_updates()
                 task_time = 1.0/0.0;
             
             // Create a new bid with the task time
-            bid_t new_bid = {robot_id, msg.event_id, task_time, msg.event_x, msg.event_y};
-            printf("Robot %d calculated bid for event %d with value %.2f\n", robot_id, new_bid.event_id, new_bid.value);
+            //bid_t new_bid = {robot_id, msg.event_id, task_time, msg.event_x, msg.event_y, msg.event_type};
+            //printf("Robot %d calculated bid for event %d with value %.2f\n", robot_id, new_bid.event_id, new_bid.value);
 
             //Insert new task at best calculated index in target list and in target bids if task time is low enough
 
             if (task_time < 1.0/0.0)
             {
-                for(i=target_list_length; i>=msg.event_index; i--)
+                for(i=target_list_length; i>=msg.event_id; i--)
                 {
                     target[i+1][0] = target[i][0];
                     target[i+1][1] = target[i][1];
@@ -472,7 +491,6 @@ static void receive_updates()
                 target_list_length = target_list_length+1;
 
                 target_bids[insert_pos].value = task_time;
-                target_bids[insert_pos].robot_id = robot_id;
             }   
 
             // Find position to insert based on task_time (ascending order)
@@ -710,7 +728,7 @@ void broadcast_targets()
     for (i = 0; i < 10; i++) {
         if (target_bids[i].event_id != INVALID && target_bids[i].value >= 0) {
             wb_emitter_send(local_emitter_tag, &target_bids[i], sizeof(bid_t));
-            printf("Robot %d broadcasted bid for event %d with value %.2f\n", robot_id, target_bids[i].event_id, target_bids[i].value);
+            //printf("Robot %d broadcasted bid for event %d with value %.2f\n", robot_id, target_bids[i].event_id, target_bids[i].value);
             //printf("Size of bid_t: %zu\n", sizeof(bid_t));
         }
     }
@@ -719,7 +737,7 @@ void broadcast_targets()
 void receive_local_bids()
 {
     bid_t received_bid;
-    int i, j, x;
+    int i, j, x, q;
     bool new_route = false;
     
     // Check for messages on the local/common channel
@@ -732,7 +750,7 @@ void receive_local_bids()
         wb_receiver_next_packet(local_receiver_tag);
         
         // Ignore our own bids
-        if (received_bid.robot_id == robot_id) {
+        if (received_bid.robot_id == robot_id || received_bid.winner_id == robot_id) {
             continue;
         }
         
@@ -750,15 +768,19 @@ void receive_local_bids()
                 if (received_bid.value < target_bids[i].value && received_bid.value >= 0) 
                 {
                     printf("Robot %d: Other robot %d has better bid (%.2f < %.2f) for event %d, removing from my list\n",
-                           robot_id, received_bid.robot_id, received_bid.value, target_bids[i].value, received_bid.event_id);
+                           robot_id, received_bid.winner_id, received_bid.value, target_bids[i].value, received_bid.event_id);
+                    
+                    // Setting winner bid in target_list to        
+                    target_bids[i].value = received_bid.value;
+                    target_bids[i].winner_id = received_bid.winner_id;
                     
                     // Remove this bid from our list by shifting remaining bids left
-                    for (j = i; j < 9; j++) 
+                    /*for (j = i; j < 9; j++) 
                     {
                         target_bids[j] = target_bids[j + 1];
                     }
                     target_bids[9].event_id = INVALID;
-                    target_bids[9].value = -1;
+                    target_bids[9].value = -1;*/
 
                     // Check if it is is in current target list
                     for (x = 0; x < MAX_TASKS; x++)
@@ -766,30 +788,13 @@ void receive_local_bids()
                         if (target[x][2] == round(received_bid.event_id))
                         {   //If not last item, path needs to be recalculated.
                             if (x < MAX_TASKS - 1) new_route = true; 
-                            else 
-                            {   // If last item, just make last target invalid.
-                                target[MAX_TASKS - 1][2] = INVALID; 
-                            }
+                       
+                                for (q = x; q < MAX_TASKS; q++){ //Make targets after invalid
+                                    target[q][2] = INVALID;
+                                }
+                            break;
                         }
                     }
-
-
-                    /*// If this was our current target (position 0), update target to next best bid
-                    if (i == 0) {
-                        if (target_bids[0].event_id != INVALID && target_bids[0].value >= 0) {
-                            printf("Robot %d switching to next best bid: event %d with value %.2f\n",
-                                   robot_id, target_bids[0].event_id, target_bids[0].value);
-                            target[0][0] = target_bids[0].event_x;
-                            target[0][1] = target_bids[0].event_y;
-                            target[0][2] = round(target_bids[0].event_id);
-                            target_valid = 1;
-                        } else {
-                            // No more valid bids, clear target
-                            target[0][2] = INVALID;
-                            target_valid = 0;
-                            printf("Robot %d has no more valid bids\n", robot_id);
-                        }
-                    }*/
                     
                 }
                 break; // Exit for loop when finding match that changes path
