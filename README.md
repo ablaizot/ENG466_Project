@@ -16,6 +16,9 @@ One task per robot
 Three tasks per robot
 - All tasks will be allocated to some robot and there is always enough robot to bid for new tasks that appears.
 
+
+# Random
+
 #### Questions
 - Auctioning in order - does it have to be the case, is it known to robots?
 - Can we reauction tasks that were already auctioned?
