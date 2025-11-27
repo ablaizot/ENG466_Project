@@ -37,7 +37,7 @@ WbDeviceTag leds[10];
 
 
 
-#define INVALID          -999
+#define INVALID          999
 #define BREAK            -999 //for physics plugin
 
 #define NUM_ROBOTS 5 // Change this also in the supervisor!
@@ -48,8 +48,8 @@ WbDeviceTag leds[10];
 
 #define MAX_WORK_TIME (120.0*1000) // 120s of maximum work time
 #define MAX_SIMULATION_TIME (180.0*1000) // 180s of simulation time
-#define MAX_TASKS 3
-#define RATE_OF_MOVEMENT 5.0 // how much time required to travel 1 unit of distance (2 seconds per meter travelled)
+#define MAX_TASKS 1
+#define RATE_OF_MOVEMENT 20.0 // how much time required to travel 1 unit of distance (20 seconds per meter travelled)
 
 #define AVG_TASK_PER_SECOND (20.0/(MAX_SIMULATION_TIME*NUM_ROBOTS)*1000)
 
@@ -196,6 +196,33 @@ double calculate_distance_walls(double start_x, double start_y, double target_x,
     return distance;
 }
 
+
+static double calculate_tasks(bid_t target_bid)
+{
+    // Iterate through all targets and calculate their distances
+    double d = calculate_distance_walls(my_pos[0], my_pos[1], target_bid.event_x, target_bid.event_y);
+
+    uint64_t completion_time;
+    if (target_bid.event_type == 0) {     // Type A task
+        completion_time = (robot_id % 2 == 0) ? 9: 3; // 3 or 9 seconds
+    } else {                        // Type B task
+        completion_time = (robot_id % 2 == 0) ? 1: 5; // 5 or 1 seconds
+    }
+    double task_time = RATE_OF_MOVEMENT * d + completion_time;
+
+        // don't bid if waiting is better
+    if (calculate_time_value(task_time) > 1){            
+            task_time = 1.0/0.0;
+    }
+
+    // don't bid if DISABLED
+    if (state == DISABLED) {
+        task_time = 1.0/0.0;
+    }
+
+    return task_time;
+}
+
 // Check if we received a message and extract information
 static void receive_updates() 
 {
@@ -274,12 +301,9 @@ static void receive_updates()
                     target_list_length = target_list_length-1;    
                 }
             }
-
-            // adjust target list length
-
-            // do the same for target bids
             for(i=0; i<10; i++)
             {
+                // adjust target list length
                 if(target_bids[i].event_id == msg.event_id)
                 {
                     for(; i<9; i++)
@@ -289,7 +313,35 @@ static void receive_updates()
                     target_bids[9].event_id = INVALID;
                     break;
                 }
-            }            
+            }         
+                
+
+            // Recalculate target bids array 
+            for(i=0; i<10; i++)
+            {
+                double task_time = calculate_tasks(target_bids[i]);
+                target_bids[i].value = task_time;
+            }
+
+            // Sort target bids based on updated values in increasing order such that lowest bid is first
+            // Invalid bids (event_id == INVALID or value < 0) should be at the end
+            for (i = 0; i < 9; i++) {
+                for (k = i + 1; k < 10; k++) {
+                    int i_invalid = (target_bids[i].event_id == INVALID || target_bids[i].value < 0 || isinf(target_bids[i].value));
+                    int k_invalid = (target_bids[k].event_id == INVALID || target_bids[k].value < 0 || isinf(target_bids[k].value));
+                    
+                    // If i is invalid and k is valid, swap (push invalid to end)
+                    // If both are valid and i > k, swap (sort by value)
+                    if ((i_invalid && !k_invalid) || 
+                        (!i_invalid && !k_invalid && target_bids[i].value > target_bids[k].value)) {
+                        bid_t temp = target_bids[i];
+                        target_bids[i] = target_bids[k];
+                        target_bids[k] = temp;
+                    }
+                }
+            }
+
+
 
         }
         else if(msg.event_state == MSG_EVENT_WON)
@@ -315,17 +367,6 @@ static void receive_updates()
             
             
             // ///*** BEST TACTIC ***///
-
-            indx = 0;
-            double d = calculate_distance_walls(my_pos[0], my_pos[1], msg.event_x, msg.event_y);
-
-            uint64_t completion_time;
-            if (msg.event_type == 0) {     // Type A task
-                completion_time = (robot_id % 2 == 0) ? 9: 3; // 3 or 9 seconds
-            } else {                        // Type B task
-                completion_time = (robot_id % 2 == 0) ? 1: 5; // 5 or 1 seconds
-            }
-
             
 
             // if (target_list_length > 0) {
@@ -356,19 +397,12 @@ static void receive_updates()
 
             
 
-            double task_time = RATE_OF_MOVEMENT * d + completion_time;
-
-            // don't bid if waiting is better
-            if (calculate_time_value(task_time) > 1)
-                task_time = 1.0/0.0;
-
-            // don't bid if DISABLED or has already maximum tasks planned
-            if (target_list_length >= MAX_TASKS || state == DISABLED)
-                task_time = 1.0/0.0;
-            
-
+            double task_time = 999;
+          
             // Create a new bid with the task time
-            bid_t new_bid = {robot_id, msg.event_id, task_time, indx, msg.event_x, msg.event_y};
+            bid_t new_bid = {robot_id, msg.event_id, task_time, indx, msg.event_x, msg.event_y, msg.event_type};
+            new_bid.value = calculate_tasks(new_bid);
+
             printf("Robot %d calculated bid for event %d with value %.2f\n", robot_id, new_bid.event_id, new_bid.value);
 
             // Find position to insert based on task_time (ascending order)
@@ -395,7 +429,7 @@ static void receive_updates()
             }
             
             // Only set target if we have a valid bid at position 0
-            if (target_bids[0].event_id != INVALID && target_bids[0].value >= 0) {
+            if (target_bids[0].event_id != INVALID && target_bids[0].value >= 0 && !isinf(target_bids[0].value)) {
                 printf("Robot %d is targeting event %d with bid value %.2f\n", robot_id, target_bids[0].event_id, target_bids[0].value);
                 target[0][0] = target_bids[0].event_x;
                 target[0][1] = target_bids[0].event_y;
@@ -605,7 +639,7 @@ void broadcast_targets()
 
 
     // broadcast target bids
-    for (i = 0; i < 10; i++) {
+    for (i = 0; i < MAX_TASKS; i++) {
         if (target_bids[i].event_id != INVALID && target_bids[i].value >= 0) {
             wb_emitter_send(local_emitter_tag, &target_bids[i], sizeof(bid_t));
             //printf("Robot %d broadcasted bid for event %d with value %.2f\n", robot_id, target_bids[i].event_id, target_bids[i].value);

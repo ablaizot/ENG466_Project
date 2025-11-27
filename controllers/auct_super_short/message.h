@@ -33,4 +33,5 @@ typedef struct {
   int event_index;
   double event_x;
   double event_y;
+  int event_type;
 } bid_t;
