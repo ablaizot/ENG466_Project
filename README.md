@@ -5,6 +5,17 @@
 	- estimate real distance to target
 - implement limited communication range
 
+# Notes for presentation
+- We calculate task time as the work time + estimated travel time including surpassing walls
+- We calculate expected value of staying still, based on work time of 120s out of 180s and average number of tasks a robot should complete in one second 
+- If the task time is bigger than the expected value calculated above, we do not bid for the task
+### Task one - auctioneer
+One task per robot
+- With only one task per robot, the auction is weird. Five tasks will be allocated to robots and the other five will be waiting
+- We have six tasks available, but only one robot that will bid for it. So if will just take the first task offered without thinking.
+Three tasks per robot
+- All tasks will be allocated to some robot and there is always enough robot to bid for new tasks that appears.
+
 #### Questions
 - Auctioning in order - does it have to be the case, is it known to robots?
 - Can we reauction tasks that were already auctioned?
