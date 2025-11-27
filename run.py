@@ -32,7 +32,7 @@ def main():
     tmp_files = []
     if mode == 'short':
         tmp_files = [
-            "events_handled.txt",
+            "short_events_handled.txt",
             "short_robot0.txt",
             "short_robot1.txt",
             "short_robot2.txt",

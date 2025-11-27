@@ -149,8 +149,10 @@ if mode not in ['normal', 'short']:
 print(f"=== ANALYZING {mode.upper()} RANGE DATA ===\n")
 
 # ------------ MAIN LOADING LOGIC ------------
-
-events_counts = load_events_counts("events_handled.txt")
+events_file = "events_handled.txt"
+if mode == 'short':
+    events_file = "short_events_handled.txt"
+events_counts = load_events_counts(events_file)
 expected_runs = len(events_counts)
 
 all_robots = {}
@@ -220,7 +222,7 @@ print(f"Standard deviation:   {std_tasks:.2f}")
 # CHOOSE RUN
 # -----------------------------------------------------------
 
-run_index = 1  # <--- CHANGE THIS to visualize another run
+run_index = 4  # <--- CHANGE THIS to visualize another run
 
 # Collect work fractions for all robots
 robot_curves = []
