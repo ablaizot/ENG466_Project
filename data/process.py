@@ -1,6 +1,11 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import argparse
+
+
+#### HOW TO USE? Run this file with 'python process.py run_to_plot'
+
 
 def compute_work_fraction(run):
     """
@@ -201,7 +206,10 @@ print(f"Standard deviation:   {std_tasks:.2f}")
 # CHOOSE RUN
 # -----------------------------------------------------------
 
-run_index = 68  # <--- CHANGE THIS to visualize another run
+parser = argparse.ArgumentParser(description="Plot number of robots working for a given run.")
+parser.add_argument("run_index", type=int, help="Index of the run to plot (0-based)")
+args = parser.parse_args()
+run_index = args.run_index
 
 # Collect work fractions for all robots
 robot_curves = []
@@ -222,14 +230,28 @@ total_working = np.sum(robot_curves, axis=0)
 tasks_completed = events_counts[run_index]
 
 # -----------------------------------------------------------
-# PLOT
+# COMPUTE X-AXIS IN SECONDS
+# -----------------------------------------------------------
+
+# We'll use robot 0 as reference
+ref_run = all_robots[0][run_index]
+sim_times = [rec["sim_ms"] for rec in ref_run["records"][1:min_len+1]]  # skip first delta
+x_seconds = np.array(sim_times) / 1000.0  # convert ms -> s
+
+# -----------------------------------------------------------
+# PLOT: robots working vs. real seconds with fixed y-axis and x-ticks
 # -----------------------------------------------------------
 
 plt.figure(figsize=(10, 4))
-plt.plot(total_working)
-plt.xlabel("Time step (≈1.024 s each)")
+plt.plot(x_seconds, total_working, linewidth=2)
+plt.xlabel("Time (s)")
 plt.ylabel("Average number of robots working")
-plt.ylim(0, 5.5)  # fixed y-axis range for consistency
+plt.ylim(0, 5.5)  # fixed y-axis for consistency
+
+# Set x-axis ticks every 20 seconds
+max_time = int(np.ceil(x_seconds[-1]))
+plt.xticks(np.arange(0, max_time + 1, 20))
+
 plt.title(f"Run {run_index}: robots working over time — tasks completed = {tasks_completed}")
 plt.grid(True)
 plt.tight_layout()
