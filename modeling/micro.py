@@ -3,6 +3,7 @@ import math
 from bidding import *
 import heapq
 from plotting import *
+import numpy as np
 
 DEBUG = False
 
@@ -203,7 +204,7 @@ class Auctioneer:
 class Simulation:
     def __init__(self):
         self.clock = 0
-        self.dt = 0.1
+        self.dt = 0.032
         self.statistics = Statistics()
         self.auctioneer = Auctioneer(self)
 
@@ -218,13 +219,19 @@ simulation = Simulation()
 simulation.run_simulation()
 print(f"Simulation completed. Total completed tasks: {simulation.statistics.completed_tasks}")
 
-plot_active_robots(simulation.statistics.robot_working, simulation.dt)
+#plot_active_robots(simulation.statistics.robot_working, simulation.dt)
+
+average_robot_working = np.array(simulation.statistics.robot_working)*1
 
 tasks = 0
-NUM_SIMUL = 1000
+NUM_SIMUL = 100
 for a in range(NUM_SIMUL):
     simulation = Simulation()
     simulation.run_simulation()
     tasks += simulation.statistics.completed_tasks
+    average_robot_working += np.array(simulation.statistics.robot_working)*1
+
 
 print(f"Completed hundred simulations, average tasks: {tasks/NUM_SIMUL}")
+
+plot_active_robots(average_robot_working/(NUM_SIMUL+1.0), simulation.dt)
