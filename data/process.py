@@ -1,4 +1,5 @@
 import os
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -132,15 +133,35 @@ def load_robot_file(filename, expected_runs):
     return runs
 
 
-# ------------ MAIN LOADING LOGIC ------------
+# ------------ PARSE COMMAND LINE ARGUMENTS ------------
 
-events_counts = load_events_counts("events_handled.txt")
+if len(sys.argv) != 2:
+    print("Usage: python process.py <mode>")
+    print("  mode: 'normal' or 'short' (for short-range epuck)")
+    sys.exit(1)
+
+mode = sys.argv[1].lower()
+
+if mode not in ['normal', 'short']:
+    print("Error: mode must be 'normal' or 'short'")
+    sys.exit(1)
+
+print(f"=== ANALYZING {mode.upper()} RANGE DATA ===\n")
+
+# ------------ MAIN LOADING LOGIC ------------
+events_file = "events_handled.txt"
+if mode == 'short':
+    events_file = "short_events_handled.txt"
+events_counts = load_events_counts(events_file)
 expected_runs = len(events_counts)
 
 all_robots = {}
 
 for i in range(5):
     robot_file = f"robot{i}.txt"
+
+    if mode == 'short':
+        robot_file = f"short_robot{i}.txt"
     if os.path.exists(robot_file):
         runs = load_robot_file(robot_file, expected_runs)
         all_robots[i] = runs
@@ -198,39 +219,57 @@ print(f"Standard deviation:   {std_tasks:.2f}")
 
 
 # -----------------------------------------------------------
-# CHOOSE RUN
+# PLOT AVERAGE CURVE ACROSS ALL RUNS
 # -----------------------------------------------------------
 
-run_index = 68  # <--- CHANGE THIS to visualize another run
+all_run_curves = []
 
-# Collect work fractions for all robots
-robot_curves = []
+for r in range(expected_runs):
+    # Collect work fractions for all robots in run r
+    robot_curves_this_run = []
+    valid_run = True
+    for robot_id, runs in all_robots.items():
+        if r < len(runs):
+            wf = compute_work_fraction(runs[r])
+            robot_curves_this_run.append(wf)
+        else:
+            valid_run = False
+            break
+    
+    if valid_run and robot_curves_this_run:
+        # Truncate to shortest robot in this run
+        if len(robot_curves_this_run) > 0:
+            min_len = min(len(c) for c in robot_curves_this_run)
+            robot_curves_this_run = [c[:min_len] for c in robot_curves_this_run]
+            
+            # Sum robots for this run
+            total_working_run = np.sum(robot_curves_this_run, axis=0)
+            all_run_curves.append(total_working_run)
 
-for robot_id, runs in all_robots.items():
-    if run_index < len(runs):
-        wf = compute_work_fraction(runs[run_index])
-        robot_curves.append(wf)
-    else:
-        print(f"Robot {robot_id} missing run {run_index}.")
-
-# Ensure all curves have the same length (truncate to shortest)
-min_len = min(len(c) for c in robot_curves)
-robot_curves = [c[:min_len] for c in robot_curves]
-
-# Sum: how many robots are working at each step
-total_working = np.sum(robot_curves, axis=0)
-tasks_completed = events_counts[run_index]
-
-# -----------------------------------------------------------
-# PLOT
-# -----------------------------------------------------------
-
-plt.figure(figsize=(10, 4))
-plt.plot(total_working)
-plt.xlabel("Time step (≈1.024 s each)")
-plt.ylabel("Average number of robots working")
-plt.ylim(0, 5.5)  # fixed y-axis range for consistency
-plt.title(f"Run {run_index}: robots working over time — tasks completed = {tasks_completed}")
-plt.grid(True)
-plt.tight_layout()
-plt.show()
+if all_run_curves:
+    # Truncate to shortest run to average them
+    final_min_len = min(len(c) for c in all_run_curves)
+    all_run_curves_truncated = [c[:final_min_len] for c in all_run_curves]
+    
+    # Average
+    avg_curve = np.mean(all_run_curves_truncated, axis=0)
+    
+    # Plot
+    plt.figure(figsize=(10, 4))
+    
+    # Plot individual runs faintly
+    for c in all_run_curves:
+        plt.plot(c, color='gray', alpha=0.15)
+        
+    plt.plot(avg_curve, color='blue', linewidth=2, label='Average')
+    
+    plt.xlabel("Time step (≈1.024 s each)")
+    plt.ylabel("Number of robots working")
+    plt.ylim(0, 5.5)  # fixed y-axis range for consistency
+    plt.title(f"Average robots working over {len(all_run_curves)} runs ({mode} mode)")
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+else:
+    print("No valid runs found to plot.")

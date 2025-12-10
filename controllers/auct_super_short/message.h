@@ -33,5 +33,9 @@ typedef struct {
   double value; // value of the bid (estimated distance)
   double event_x;
   double event_y;
+<<<<<<< HEAD
   int event_type; // for greedy task allocation
+=======
+  int event_type;
+>>>>>>> d2fe8db86e7e5724b9380bdcd5608da8b18a95e1
 } bid_t;

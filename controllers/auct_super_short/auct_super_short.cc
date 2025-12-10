@@ -599,6 +599,7 @@ public:
 
     // Time to end the experiment?
     if (MAX_RUNTIME > 0 && clock_ >= MAX_RUNTIME) {
+
       for(int i=0;i<NUM_ROBOTS;i++){
           buildMessage(i, NULL, MSG_QUIT, &msg);
           wb_emitter_set_channel(emitter_, i+1);
@@ -611,6 +612,15 @@ public:
       printf("Handled %d events in %d seconds, events handled per second = %.2f\n",
              num_events_handled_, (int) clock_ / 1000, ehr);
       printf("Performance: %f\n", perf);
+
+      FILE* f = fopen("../../tmp/short_events_handled.txt","a");
+      fprintf(f,"%d\n",num_events_handled_);
+      fclose(f);
+      
+      FILE* f_ack = fopen("../../tmp/webots_done","w");
+      fprintf(f_ack,"DONE!");
+      fclose(f_ack);
+
       return false;
     } 
     else { return true;} //continue

@@ -35,9 +35,7 @@ WbDeviceTag leds[10];
 #define DEBUG 1
 #define RX_PERIOD           2    // time difference between two received elements (ms) (1000)
 
-
-
-#define INVALID          -999
+#define INVALID          999
 #define BREAK            -999 //for physics plugin
 
 #define NUM_ROBOTS 5 // Change this also in the supervisor!
@@ -48,10 +46,10 @@ WbDeviceTag leds[10];
 
 #define MAX_WORK_TIME (120.0*1000) // 120s of maximum work time
 #define MAX_SIMULATION_TIME (180.0*1000) // 180s of simulation time
-#define MAX_TASKS 3
-#define RATE_OF_MOVEMENT 5.0 // how much time required to travel 1 unit of distance (2 seconds per meter travelled)
+#define MAX_TASKS 1
+#define RATE_OF_MOVEMENT 20.0 // how much time required to travel 1 unit of distance (20 seconds per meter travelled)
 
-#define AVG_TASK_PER_SECOND (20.0/(MAX_SIMULATION_TIME*NUM_ROBOTS)*1000)
+#define AVG_TASK_PER_SECOND (85.0/(MAX_SIMULATION_TIME*NUM_ROBOTS)*1000)
 
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
@@ -73,6 +71,7 @@ WbDeviceTag leds[10];
 // NOTE: Weights from reynolds2.h
 int Interconn[16] = {17,29,34,10,8,-38,-56,-76,-72,-58,-36,8,10,36,28,18};
 
+FILE *stat_file;
 
 // The state variables
 int clock;
@@ -88,6 +87,11 @@ int indx;                   // Event index to be sent to the supervisor
 float buff[99];             // Buffer for physics plugin
 
 double stat_max_velocity;
+int stat_moving_time = 0;
+int stat_avoiding_time = 0;
+int stat_task_time = 0;
+int stat_idle_time = 0;
+
 int worked_time = 0;
 bool initial_complete = false;
 
@@ -191,89 +195,33 @@ double calculate_distance_walls(double start_x, double start_y, double target_x,
     return distance;
 }
 
-void greedy_route_choice()
-{//Function taht sets a new greedy list of targets with only information about current target_bids
 
-    // Initialize parameters
-        int i;
-        int targets_added = 0;
-        bool added_events[10] = {0};
-        double pos_x = my_pos[0];
-        double pos_y = my_pos[1];
+static double calculate_tasks(bid_t target_bid)
+{
+    // Iterate through all targets and calculate their distances
+    double d = calculate_distance_walls(my_pos[0], my_pos[1], target_bid.event_x, target_bid.event_y);
 
-    // Find first invalid target so that the 
-    for (i = 0; i < MAX_TASKS; i++) 
-    {
-        if(target[i][2] == INVALID){
-            targets_added = i; // Set number of initial targets added
-            if (i > 0){        
-                pos_x = target[i-1][0]; //Set curr pos as target before invalid 
-                pos_y = target[i-1][0];
-                added_events[(int)target[i-1][2]] = true;
-            }
-            break;
-        }
+    uint64_t completion_time;
+    if (target_bid.event_type == 0) {     // Type A task
+        completion_time = (robot_id % 2 == 0) ? 9: 3; // 3 or 9 seconds
+    } else {                        // Type B task
+        completion_time = (robot_id % 2 == 0) ? 1: 5; // 5 or 1 seconds
+    }
+    double task_time = RATE_OF_MOVEMENT * d + completion_time;
+
+        // don't bid if waiting is better
+    if (calculate_time_value(task_time) > 1){ 
+           // printf("Robot %d decided not to bid for event %d due to high waiting value\n", robot_id, target_bid.event_id);           
+            task_time = 1.0/0.0;
     }
 
-    while (targets_added < MAX_TASKS) //Continue until all spots assigned
-    {
-        double best_task_time = 30.0; 
-        int best_idx = -1;
-
-        for (i = 0; i < 10; i++)
-        {
-            if (!added_events[i] && target_bids[i].event_id != INVALID) //Make sure not used and not invalid
-            {
-                // Calculate time to perform taks from last x,y position
-                double d = calculate_distance_walls(pos_x, pos_y, target_bids[i].event_x, target_bids[i].event_y);
-                double completion_time = 1.0;
-
-                if (target_bids[i].event_type == 0) { // Type A task
-                    completion_time = (robot_id % 2 == 0) ? 9 : 3;
-                } 
-                else {// Type B task
-                    completion_time = (robot_id % 2 == 0) ? 1 : 5;
-                }
-
-                double task_time = RATE_OF_MOVEMENT * d + completion_time; //Final which is compared to the previous best task time
-                
-                if (task_time < target_bids[i].value || target_bids[i].winner_id == robot_id)
-                {
-                    if (task_time < best_task_time) 
-                    {
-                        best_task_time = task_time; //Update best performin
-                        best_idx = i; //Index in targets bid list
-                    }
-                }
-            }
-        }
-        // If no task is good enough braek the loop and stop searching, wait for a new event
-        if (best_idx == -1 || calculate_time_value(best_task_time) > 1){
-            break;
-        }
-        // Add the current target to target list
-        target[targets_added][0] = target_bids[best_idx].event_x;
-        target[targets_added][1] = target_bids[best_idx].event_y;
-        target[targets_added][2] = target_bids[best_idx].event_id;
-        
-        //printf("The id of added target %d\n", target_bids[best_idx].event_id);
-
-        // Update the position to be the one of the added target
-        pos_x = target_bids[best_idx].event_x;
-        pos_y = target_bids[best_idx].event_y;
-
-        // Update bids in target_bids for the targets actually wanted to complete
-        target_bids[best_idx].value = best_task_time;
-        target_bids[best_idx].winner_id = robot_id;
-        
-        added_events[best_idx] = true;
-        targets_added++; //Next iteration
-
+    // don't bid if DISABLED
+    if (state == DISABLED) {
+        task_time = 1.0/0.0;
     }
-    target_valid = (targets_added > 0) ? 1 : 0; //If no target good, set target valid to 0. 
 
+    return task_time;
 }
-
 
 // Check if we received a message and extract information
 static void receive_updates() 
@@ -328,6 +276,11 @@ static void receive_updates()
             wb_motor_set_velocity(left_motor, 0);
             wb_motor_set_velocity(right_motor, 0);
             wb_robot_step(TIME_STEP);
+            
+            fprintf(stat_file,"TERMINATED %d;%d;%d;%d\n",stat_moving_time, stat_avoiding_time, stat_task_time, stat_idle_time);
+    
+            fclose(stat_file);
+    
             exit(0);
         }
         else if(msg.event_state == MSG_EVENT_DONE)
@@ -348,12 +301,9 @@ static void receive_updates()
                     target_list_length = target_list_length-1;    
                 }
             }
-
-            // adjust target list length
-
-            // do the same for target bids
             for(i=0; i<10; i++)
             {
+                // adjust target list length
                 if(target_bids[i].event_id == msg.event_id)
                 {
                     for(; i<9; i++)
@@ -363,7 +313,35 @@ static void receive_updates()
                     target_bids[9].event_id = INVALID;
                     break;
                 }
-            }            
+            }         
+                
+
+            // Recalculate target bids array 
+            for(i=0; i<10; i++)
+            {
+                double task_time = calculate_tasks(target_bids[i]);
+                target_bids[i].value = task_time;
+            }
+
+            // Sort target bids based on updated values in increasing order such that lowest bid is first
+            // Invalid bids (event_id == INVALID or value < 0) should be at the end
+            for (i = 0; i < 9; i++) {
+                for (k = i + 1; k < 10; k++) {
+                    int i_invalid = (target_bids[i].event_id == INVALID || target_bids[i].value < 0 || isinf(target_bids[i].value));
+                    int k_invalid = (target_bids[k].event_id == INVALID || target_bids[k].value < 0 || isinf(target_bids[k].value));
+                    
+                    // If i is invalid and k is valid, swap (push invalid to end)
+                    // If both are valid and i > k, swap (sort by value)
+                    if ((i_invalid && !k_invalid) || 
+                        (!i_invalid && !k_invalid && target_bids[i].value > target_bids[k].value)) {
+                        bid_t temp = target_bids[i];
+                        target_bids[i] = target_bids[k];
+                        target_bids[k] = temp;
+                    }
+                }
+            }
+
+
 
         }
         /*else if(msg.event_state == MSG_EVENT_WON)
@@ -421,77 +399,41 @@ static void receive_updates()
             }
             
             // ///*** BEST TACTIC ***///
+            
 
-            indx = 0;
-            double d = calculate_distance_walls(my_pos[0], my_pos[1], msg.event_x, msg.event_y);
-
-            int completion_time;
-            if (msg.event_type == 0) {     // Type A task
-                completion_time = (robot_id % 2 == 0) ? 9: 3; // 3 or 9 seconds
-            } else {                        // Type B task
-                completion_time = (robot_id % 2 == 0) ? 1: 5; // 5 or 1 seconds
-            }
-
-
-            if (target_list_length > 0) {
-                for (i = 0; i < target_list_length; i++) {
-                    if (i == 0) {
-                        double dbeforetogoal = calculate_distance_walls(my_pos[0], my_pos[1], msg.event_x, msg.event_y);
-                        double daftertogoal  = calculate_distance_walls(target[i][0], target[i][1], msg.event_x, msg.event_y);
-                        double dbeforetodafter = calculate_distance_walls(my_pos[0], my_pos[1], target[i][0], target[i][1]);
-                        d = dbeforetogoal + daftertogoal - dbeforetodafter;
-                    } else {
-                        double dbeforetogoal = calculate_distance_walls(target[i-1][0], target[i-1][1], msg.event_x, msg.event_y);
-                        double daftertogoal  = calculate_distance_walls(target[i][0], target[i][1], msg.event_x, msg.event_y);
-                        double dbeforetodafter = calculate_distance_walls(target[i-1][0], target[i-1][1], target[i][0], target[i][1]);
-                        if ((dbeforetogoal + daftertogoal - dbeforetodafter) < d) {
-                            d = dbeforetogoal + daftertogoal - dbeforetodafter;
-                            indx = i;
-                        }
-                        if (i == target_list_length - 1) {
-                            if (daftertogoal < d) {
-                                d = daftertogoal;
-                                indx = i + 1;
-                            }
-                        }
-                    }
+            // if (target_list_length > 0) {
+            //     for (i = 0; i < target_list_length; i++) {
+            //         if (i == 0) {
+            //             double dbeforetogoal = calculate_distance_walls(my_pos[0], my_pos[1], msg.event_x, msg.event_y);
+            //             double daftertogoal  = calculate_distance_walls(target[i][0], target[i][1], msg.event_x, msg.event_y);
+            //             double dbeforetodafter = calculate_distance_walls(my_pos[0], my_pos[1], target[i][0], target[i][1]);
+            //             d = dbeforetogoal + daftertogoal - dbeforetodafter;
+            //         } else {
+            //             double dbeforetogoal = calculate_distance_walls(target[i-1][0], target[i-1][1], msg.event_x, msg.event_y);
+            //             double daftertogoal  = calculate_distance_walls(target[i][0], target[i][1], msg.event_x, msg.event_y);
+            //             double dbeforetodafter = calculate_distance_walls(target[i-1][0], target[i-1][1], target[i][0], target[i][1]);
+            //             if ((dbeforetogoal + daftertogoal - dbeforetodafter) < d) {
+            //                 d = dbeforetogoal + daftertogoal - dbeforetodafter;
+            //                 indx = i;
+            //             }
+            //             if (i == target_list_length - 1) {
+            //                 if (daftertogoal < d) {
+            //                     d = daftertogoal;
+            //                     indx = i + 1;
+            //                 }
+            //             }
+            //         }
                     
                 }
             }
 
-            double task_time = RATE_OF_MOVEMENT * d + completion_time;
-
-            // don't bid if waiting is better
-            if (calculate_time_value(task_time) > 1)
-                task_time = 1.0/0.0;
-
-            // don't bid if DISABLED or has already maximum tasks planned
-            if (target_list_length >= MAX_TASKS || state == DISABLED)
-                task_time = 1.0/0.0;
-            
+            double task_time = 999;
+          
             // Create a new bid with the task time
-            //bid_t new_bid = {robot_id, msg.event_id, task_time, msg.event_x, msg.event_y, msg.event_type};
-            //printf("Robot %d calculated bid for event %d with value %.2f\n", robot_id, new_bid.event_id, new_bid.value);
+            bid_t new_bid = {robot_id, msg.event_id, task_time, indx, msg.event_x, msg.event_y, msg.event_type};
+            new_bid.value = calculate_tasks(new_bid);
 
-            //Insert new task at best calculated index in target list and in target bids if task time is low enough
-
-            if (task_time < 1.0/0.0)
-            {
-                for(i=target_list_length; i>=msg.event_id; i--)
-                {
-                    target[i+1][0] = target[i][0];
-                    target[i+1][1] = target[i][1];
-                    target[i+1][2] = target[i][2];   
-                }
-
-                target[indx][0] = msg.event_x;
-                target[indx][1] = msg.event_y;
-                target[indx][2] = msg.event_id;
-                target_valid = 1; //used in general state machine
-                target_list_length = target_list_length+1;
-
-                target_bids[insert_pos].value = task_time;
-            }   
+            printf("Robot %d calculated bid for event %d with value %.2f\n", robot_id, new_bid.event_id, new_bid.value);
 
             // Find position to insert based on task_time (ascending order)
             /*int insert_pos = 0;
@@ -517,14 +459,17 @@ static void receive_updates()
             }
             
             // Only set target if we have a valid bid at position 0
-            if (target_bids[0].event_id != INVALID && target_bids[0].value >= 0) {
+            if (target_bids[0].event_id != INVALID && target_bids[0].value >= 0 && !isinf(target_bids[0].value)) {
                 printf("Robot %d is targeting event %d with bid value %.2f\n", robot_id, target_bids[0].event_id, target_bids[0].value);
                 target[0][0] = target_bids[0].event_x;
                 target[0][1] = target_bids[0].event_y;
                 target[0][2] = round(target_bids[0].event_id);
                 target_valid = 1;
                 printf("Robot %d set target to event %d at (%.2f, %.2f)\n", robot_id, target_bids[0].event_id, target[0][0], target[0][1]);
-            }*/
+            }else {
+                printf("Robot %d has no valid bid for event %d, not setting target\n", robot_id, msg.event_id);
+                target_valid = 0;
+            }
         }
     }
     
@@ -707,6 +652,7 @@ void update_state(int *distances)
     } else if (target_valid) {
         state = GO_TO_GOAL;
     } else {
+        printf("Robot %d has no valid target\n", robot_id);
         state = DEFAULT_STATE;
     }
 }
@@ -725,7 +671,7 @@ void broadcast_targets()
 
 
     // broadcast target bids
-    for (i = 0; i < 10; i++) {
+    for (i = 0; i < MAX_TASKS; i++) {
         if (target_bids[i].event_id != INVALID && target_bids[i].value >= 0) {
             wb_emitter_send(local_emitter_tag, &target_bids[i], sizeof(bid_t));
             //printf("Robot %d broadcasted bid for event %d with value %.2f\n", robot_id, target_bids[i].event_id, target_bids[i].value);
@@ -844,11 +790,13 @@ void run(int ms)
         case STAY:
             msl = 0;
             msr = 0;
+            stat_idle_time += ms;
             break;
 
         case DOING_TASK:
             msl = 0;
             msr = 0;
+            stat_task_time += ms;
             break;
 
         case DISABLED:
@@ -858,10 +806,12 @@ void run(int ms)
 
         case GO_TO_GOAL:
             compute_go_to_goal(&msl, &msr);
+            stat_moving_time += ms;
             break;
 
         case OBSTACLE_AVOID:
             compute_avoid_obstacle(&msl, &msr, distances);
+            stat_avoiding_time += ms;
             break;
 
         case RANDOM_WALK:
@@ -879,7 +829,7 @@ void run(int ms)
     msr_w = msr*MAX_SPEED_WEB/1000;
     wb_motor_set_velocity(left_motor, msl_w);
     wb_motor_set_velocity(right_motor, msr_w);
-    update_self_motion(msl, msr);
+    double velocity = update_self_motion(msl, msr);
 
     if (state != STAY && state != DISABLED) {
         worked_time += ms;
@@ -888,6 +838,10 @@ void run(int ms)
 
     // Update clock
     clock += ms;
+    
+    if (clock % 1024 == 0) {
+      fprintf(stat_file,"%d/%d; %f\n",worked_time, clock, velocity);
+    }
 }
 
 
@@ -896,9 +850,16 @@ int main(int argc, char **argv)
 {
     reset();
   
+    char filename[64];
+    sprintf(filename, "../../tmp/short_robot%d.txt", robot_id);
+    stat_file = fopen(filename, "a");
+
+    
     // RUN THE MAIN ALGORIHM
     while (wb_robot_step(TIME_STEP) != -1) {run(TIME_STEP);}
+
     wb_robot_cleanup();
+
 
     return 0;
 }
