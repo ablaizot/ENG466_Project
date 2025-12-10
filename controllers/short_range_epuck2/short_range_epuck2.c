@@ -35,8 +35,6 @@ WbDeviceTag leds[10];
 #define DEBUG 1
 #define RX_PERIOD           2    // time difference between two received elements (ms) (1000)
 
-
-
 #define INVALID          999
 #define BREAK            -999 //for physics plugin
 
@@ -51,7 +49,7 @@ WbDeviceTag leds[10];
 #define MAX_TASKS 1
 #define RATE_OF_MOVEMENT 20.0 // how much time required to travel 1 unit of distance (20 seconds per meter travelled)
 
-#define AVG_TASK_PER_SECOND (20.0/(MAX_SIMULATION_TIME*NUM_ROBOTS)*1000)
+#define AVG_TASK_PER_SECOND (85.0/(MAX_SIMULATION_TIME*NUM_ROBOTS)*1000)
 
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
@@ -211,7 +209,8 @@ static double calculate_tasks(bid_t target_bid)
     double task_time = RATE_OF_MOVEMENT * d + completion_time;
 
         // don't bid if waiting is better
-    if (calculate_time_value(task_time) > 1){            
+    if (calculate_time_value(task_time) > 1){ 
+           // printf("Robot %d decided not to bid for event %d due to high waiting value\n", robot_id, target_bid.event_id);           
             task_time = 1.0/0.0;
     }
 
@@ -436,6 +435,9 @@ static void receive_updates()
                 target[0][2] = round(target_bids[0].event_id);
                 target_valid = 1;
                 printf("Robot %d set target to event %d at (%.2f, %.2f)\n", robot_id, target_bids[0].event_id, target[0][0], target[0][1]);
+            }else {
+                printf("Robot %d has no valid bid for event %d, not setting target\n", robot_id, msg.event_id);
+                target_valid = 0;
             }
         }
     }
@@ -620,6 +622,7 @@ void update_state(int *distances)
     } else if (target_valid) {
         state = GO_TO_GOAL;
     } else {
+        printf("Robot %d has no valid target\n", robot_id);
         state = DEFAULT_STATE;
     }
 }
