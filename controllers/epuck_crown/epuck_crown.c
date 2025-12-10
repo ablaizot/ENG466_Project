@@ -299,6 +299,12 @@ static void receive_updates()
                         double daftertogoal  = calculate_distance_walls(target[i][0], target[i][1], msg.event_x, msg.event_y);
                         double dbeforetodafter = calculate_distance_walls(my_pos[0], my_pos[1], target[i][0], target[i][1]);
                         d = dbeforetogoal + daftertogoal - dbeforetodafter;
+                        if (i == target_list_length - 1) {
+                            if (daftertogoal < d) {
+                                d = daftertogoal;
+                                indx = i + 1;
+                            }
+                        }
                     } else {
                         double dbeforetogoal = calculate_distance_walls(target[i-1][0], target[i-1][1], msg.event_x, msg.event_y);
                         double daftertogoal  = calculate_distance_walls(target[i][0], target[i][1], msg.event_x, msg.event_y);
