@@ -140,7 +140,8 @@ def load_robot_file(filename, expected_runs):
 
 # ------------ PARSE COMMAND LINE ARGUMENTS ------------
 
-if len(sys.argv) != 2:
+
+if len(sys.argv) != 3:
     print("Usage: python process.py <mode>")
     print("  mode: 'normal' or 'short' (for short-range epuck)")
     sys.exit(1)
@@ -232,9 +233,26 @@ print(f"Standard deviation:   {std_tasks:.2f}")
 # -----------------------------------------------------------
 
 parser = argparse.ArgumentParser(description="Plot number of robots working for a given run.")
-parser.add_argument("run_index", type=int, help="Index of the run to plot (0-based)")
+
+# 1. ADD 'mode' as the first positional argument (must be a string)
+parser.add_argument("mode", type=str, 
+                    help="Mode of data to analyze ('normal', 'short', or 'short_multi')")
+
+# 2. KEEP 'run_index' as the second positional argument (must be an integer)
+parser.add_argument("run_index", type=int, 
+                    help="Index of the run to plot (0-based)")
+
 args = parser.parse_args()
+
+# Extract the variables that the rest of the script expects
+mode = args.mode.lower()
 run_index = args.run_index
+
+# You need to ensure the mode check is still performed, 
+# as argparse won't validate the string content itself.
+if mode not in ['normal', 'short', 'short_multi']:
+    print("Error: mode must be 'normal', 'short_multi' or 'short'")
+    sys.exit(1)
 
 # Collect work fractions for all robots
 robot_curves = []
@@ -267,7 +285,103 @@ x_seconds = np.array(sim_times) / 1000.0  # convert ms -> s
 # PLOT: robots working vs. real seconds with fixed y-axis and x-ticks
 # -----------------------------------------------------------
 
-plt.figure(figsize=(10, 4))
+individual_run_curves = {} 
+
+# Iterate over all runs that were loaded (up to expected_runs)
+for run_idx in range(expected_runs):
+    run_curves = []
+    
+    # Collect data for all robots for the current run_idx
+    for robot_id, runs in all_robots.items():
+        if run_idx < len(runs):
+            wf = compute_work_fraction(runs[run_idx])
+            run_curves.append(wf)
+        else:
+            # Handle the case where a robot file might be missing a run
+            print(f"Robot {robot_id} missing run {run_idx}.")
+
+    # If any data was collected for this run:
+    if run_curves:
+        # Ensure all curves for THIS run have the same length (truncate to shortest)
+        min_len = min(len(c) for c in run_curves)
+        run_curves = [c[:min_len] for c in run_curves]
+
+        # Calculate the sum (Total Working Robots) for THIS run
+        total_working_for_run = np.sum(run_curves, axis=0)
+        
+        # Store the total working curve for this run
+        individual_run_curves[run_idx] = total_working_for_run
+
+
+# --- 2. ALIGN ALL RUNS FOR AVERAGING ---
+
+# Find the minimum length across all collected runs
+all_lengths = [len(curve) for curve in individual_run_curves.values()]
+if not all_lengths:
+    print("Error: No data found for any runs to average.")
+    sys.exit(1)
+    
+min_total_len = min(all_lengths)
+
+# Truncate all individual run curves to the minimum length
+aligned_runs = []
+for curve in individual_run_curves.values():
+    aligned_runs.append(curve[:min_total_len])
+
+# Stack the aligned runs vertically to create a 2D array
+stacked_runs = np.stack(aligned_runs, axis=0)
+
+
+# --- 3. CALCULATE THE AVERAGE CURVE ---
+
+# The average total working robots at each time step
+average_working = np.mean(stacked_runs, axis=0)
+
+
+# --- 4. COMPUTE X-AXIS (using the first run as reference for time) ---
+
+# We'll use robot 0 and run 0 as the time reference
+ref_run = all_robots[0][0]
+sim_times = [rec["sim_ms"] for rec in ref_run["records"][1:min_total_len+1]] 
+x_seconds = np.array(sim_times) / 1000.0  # convert ms -> s
+
+
+# -----------------------------------------------------------
+# PLOT GENERATION
+# -----------------------------------------------------------
+
+plt.figure(figsize=(10, 5))
+
+# Plot Individual Runs (Lighter Grey in Background)
+for run_curve in aligned_runs:
+    plt.plot(x_seconds, run_curve, color='lightgray', alpha=0.6, linewidth=1, label='_nolegend_')
+
+# Plot the Average Run (Dark, Thick Line in Foreground)
+plt.plot(x_seconds, average_working, color='C0', linewidth=3, label='Average Working')
+
+
+plt.xlabel("Time (s)")
+plt.ylabel("Average number of robots working")
+plt.ylim(0, 5.5)  # fixed y-axis for consistency
+plt.legend()
+
+# Set x-axis ticks every 20 seconds
+max_time = int(np.ceil(x_seconds[-1]))
+plt.xticks(np.arange(0, max_time + 1, 20))
+
+# Note: The title now reflects the averaged results
+plt.title(f"Averaged Robots Working over Time ({expected_runs} Runs)")
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+# --- DELETE THE ENTIRE OLD "CHOOSE RUN" BLOCK BELOW THIS ---
+# (The one that uses argparse, if you previously integrated mode/run_index at the top)
+# If you kept the old argparse block, you need to adapt this logic to work after it.
+# Assuming you want to plot the average, you should DELETE the old plotting/argparse logic.
+# -----------------------------------------------------------
+
+"""plt.figure(figsize=(10, 4))
 plt.plot(x_seconds, total_working, linewidth=2)
 plt.xlabel("Time (s)")
 plt.ylabel("Average number of robots working")
@@ -280,4 +394,4 @@ plt.xticks(np.arange(0, max_time + 1, 20))
 plt.title(f"Run {run_index}: robots working over time — tasks completed = {tasks_completed}")
 plt.grid(True)
 plt.tight_layout()
-plt.show()
+plt.show()"""

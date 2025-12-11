@@ -49,7 +49,7 @@ WbDeviceTag leds[10];
 #define MAX_WORK_TIME (120.0*1000) // 120s of maximum work time
 #define MAX_SIMULATION_TIME (180.0*1000) // 180s of simulation time
 #define MAX_TASKS 3
-#define RATE_OF_MOVEMENT 30.0 // how much time required to travel 1 unit of distance (2 seconds per meter travelled)
+#define RATE_OF_MOVEMENT 20.0 // how much time required to travel 1 unit of distance (2 seconds per meter travelled)
 
 #define AVG_TASK_PER_SECOND (100.0/(MAX_SIMULATION_TIME*NUM_ROBOTS))*1000
 
@@ -310,7 +310,7 @@ void greedy_route_choice()
         {  
               //printf("Robot %d: BID time VALUE %f and winner id %d \n", robot_id, target_bids[i].value, target_bids[i].winner_id);
             // Only consider tasks some tasks
-            if (!added_events[i] && target_bids[i].event_id != INVALID && (target_bids[i].winner_id == robot_id || calculate_time_value(target_bids[i].value) > 1.0))
+            if (!added_events[i] && target_bids[i].event_id != INVALID && target_bids[i].winner_id == robot_id)
             {
                 double task_completion_time;
                 if (target_bids[i].event_type == 0) {
@@ -1161,7 +1161,7 @@ void receive_local_bids()
                         if (target[x][2] == round(received_bid.event_id))
                         { 
                            new_route = true;
-                           for (q = 0; q < MAX_TASKS; q++){
+                           for (q = x; q < MAX_TASKS; q++){
                                    target[q][2] = INVALID;
                            }
                            break;
@@ -1267,7 +1267,7 @@ void run(int ms)
     clock += ms;
 
     if (clock % 1024 == 0) {
-        fprintf(stat_file, "%d;%d; %f\n", worked_time, clock, velocity);
+        fprintf(stat_file, "%d/%d;%f\n", worked_time, clock, velocity);
     }
 
 }
