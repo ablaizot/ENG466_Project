@@ -46,7 +46,7 @@ WbDeviceTag leds[10];
 #define MAX_TASKS 3
 #define RATE_OF_MOVEMENT 20.0 // how much time required to travel 1 unit of distance (2 seconds per meter travelled)
 
-#define AVG_TASK_PER_SECOND (20.0/(MAX_SIMULATION_TIME*NUM_ROBOTS)*1000)
+#define AVG_TASK_PER_SECOND (10.0/(MAX_SIMULATION_TIME*NUM_ROBOTS)*1000)
 
 #define STATECHANGE_DIST 120   // minimum value of all sensor inputs combined to change to obstacle avoidance mode
 
@@ -161,20 +161,22 @@ double calculate_distance_walls(double start_x, double start_y, double target_x,
     
 
     Vec2 hit;
+    
+    double wall_factor = 2.0;
 
     double distance = dist(start_x, start_y, target_x, target_y);
 
     if (segmentsIntersect(startPos, targetPos, line1_A, line1_B)) {
         if (intersectionPoint(startPos, targetPos, line1_A, line1_B, &hit)) {
             //printf("Robot %d, crossed line 1 at: (%.2f, %.2f)\n", robot_id, hit.x, hit.y);
-            distance += dist(hit.x, hit.y, line1_B.x, line1_B.y) * 2;
+            distance += wall_factor*dist(hit.x, hit.y, line1_B.x, line1_B.y) * 2;
         }
     } 
 
     if (segmentsIntersect(startPos, targetPos, line2_A, line2_B)) {
         if (intersectionPoint(startPos, targetPos, line2_A, line2_B, &hit)) {
             //printf("Robot %d, crossed line 2 at: (%.2f, %.2f)\n", robot_id, hit.x, hit.y);
-            distance += dist(hit.x, hit.y, line2_A.x, line2_A.y) * 2;
+            distance += wall_factor*dist(hit.x, hit.y, line2_A.x, line2_A.y) * 2;
         }
     } 
     

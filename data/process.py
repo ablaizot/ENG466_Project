@@ -2,6 +2,11 @@ import os
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
+import argparse
+
+
+#### HOW TO USE? Run this file with 'python process.py run_to_plot'
+
 
 def compute_work_fraction(run):
     """
@@ -219,57 +224,56 @@ print(f"Standard deviation:   {std_tasks:.2f}")
 
 
 # -----------------------------------------------------------
-# PLOT AVERAGE CURVE ACROSS ALL RUNS
+# CHOOSE RUN
 # -----------------------------------------------------------
 
-all_run_curves = []
+parser = argparse.ArgumentParser(description="Plot number of robots working for a given run.")
+parser.add_argument("run_index", type=int, help="Index of the run to plot (0-based)")
+args = parser.parse_args()
+run_index = args.run_index
 
-for r in range(expected_runs):
-    # Collect work fractions for all robots in run r
-    robot_curves_this_run = []
-    valid_run = True
-    for robot_id, runs in all_robots.items():
-        if r < len(runs):
-            wf = compute_work_fraction(runs[r])
-            robot_curves_this_run.append(wf)
-        else:
-            valid_run = False
-            break
-    
-    if valid_run and robot_curves_this_run:
-        # Truncate to shortest robot in this run
-        if len(robot_curves_this_run) > 0:
-            min_len = min(len(c) for c in robot_curves_this_run)
-            robot_curves_this_run = [c[:min_len] for c in robot_curves_this_run]
-            
-            # Sum robots for this run
-            total_working_run = np.sum(robot_curves_this_run, axis=0)
-            all_run_curves.append(total_working_run)
+# Collect work fractions for all robots
+robot_curves = []
 
-if all_run_curves:
-    # Truncate to shortest run to average them
-    final_min_len = min(len(c) for c in all_run_curves)
-    all_run_curves_truncated = [c[:final_min_len] for c in all_run_curves]
-    
-    # Average
-    avg_curve = np.mean(all_run_curves_truncated, axis=0)
-    
-    # Plot
-    plt.figure(figsize=(10, 4))
-    
-    # Plot individual runs faintly
-    for c in all_run_curves:
-        plt.plot(c, color='gray', alpha=0.15)
-        
-    plt.plot(avg_curve, color='blue', linewidth=2, label='Average')
-    
-    plt.xlabel("Time step (≈1.024 s each)")
-    plt.ylabel("Number of robots working")
-    plt.ylim(0, 5.5)  # fixed y-axis range for consistency
-    plt.title(f"Average robots working over {len(all_run_curves)} runs ({mode} mode)")
-    plt.grid(True)
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
-else:
-    print("No valid runs found to plot.")
+for robot_id, runs in all_robots.items():
+    if run_index < len(runs):
+        wf = compute_work_fraction(runs[run_index])
+        robot_curves.append(wf)
+    else:
+        print(f"Robot {robot_id} missing run {run_index}.")
+
+# Ensure all curves have the same length (truncate to shortest)
+min_len = min(len(c) for c in robot_curves)
+robot_curves = [c[:min_len] for c in robot_curves]
+
+# Sum: how many robots are working at each step
+total_working = np.sum(robot_curves, axis=0)
+tasks_completed = events_counts[run_index]
+
+# -----------------------------------------------------------
+# COMPUTE X-AXIS IN SECONDS
+# -----------------------------------------------------------
+
+# We'll use robot 0 as reference
+ref_run = all_robots[0][run_index]
+sim_times = [rec["sim_ms"] for rec in ref_run["records"][1:min_len+1]]  # skip first delta
+x_seconds = np.array(sim_times) / 1000.0  # convert ms -> s
+
+# -----------------------------------------------------------
+# PLOT: robots working vs. real seconds with fixed y-axis and x-ticks
+# -----------------------------------------------------------
+
+plt.figure(figsize=(10, 4))
+plt.plot(x_seconds, total_working, linewidth=2)
+plt.xlabel("Time (s)")
+plt.ylabel("Average number of robots working")
+plt.ylim(0, 5.5)  # fixed y-axis for consistency
+
+# Set x-axis ticks every 20 seconds
+max_time = int(np.ceil(x_seconds[-1]))
+plt.xticks(np.arange(0, max_time + 1, 20))
+
+plt.title(f"Run {run_index}: robots working over time — tasks completed = {tasks_completed}")
+plt.grid(True)
+plt.tight_layout()
+plt.show()
