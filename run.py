@@ -6,24 +6,26 @@ import tempfile
 import sys
 
 # Path to Webots on Windows
-WEBOTS_PATH = r"C:\Users\aymer\AppData\Local\Programs\Webots\msys64\mingw64\bin\webotsw.exe"
+WEBOTS_PATH = r"C:\Program Files\Webots\msys64\mingw64\bin\webotsw.exe"
 
 def main():
     if len(sys.argv) != 3:
         print("Usage: python run.py <number_of_runs> <mode>")
-        print("  mode: 'normal' or 'short' (for short-range epuck)")
+        print("  mode: 'normal' or 'short' (for short-range epuck) or 'short_multi'")
         sys.exit(1)
 
     runs = int(sys.argv[1])
     mode = sys.argv[2].lower()
     
-    if mode not in ['normal', 'short']:
+    if mode not in ['normal', 'short', 'short_multi']:
         print("Error: mode must be 'normal' or 'short'")
         sys.exit(1)
     
     # Select world file based on mode
     if mode == 'short':
         world_file = "worlds/project4_thin_short.wbt"
+    elif mode == 'short_multi':
+        world_file = "worlds/project4_thin_short_multi.wbt"
     else:
         world_file = "worlds/project4_thin.wbt"
 
@@ -38,6 +40,16 @@ def main():
             "short_robot2.txt",
             "short_robot3.txt",
             "short_robot4.txt",
+            "webots_done"
+        ]
+    elif mode == 'short_multi':
+        tmp_files = [
+            "short_multi_events_handled.txt",
+            "short_multi_robot0.txt",
+            "short_multi_robot1.txt",
+            "short_multi_robot2.txt",
+            "short_multi_robot3.txt",
+            "short_multi_robot4.txt",
             "webots_done"
         ]
     else:

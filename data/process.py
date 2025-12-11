@@ -147,8 +147,8 @@ if len(sys.argv) != 2:
 
 mode = sys.argv[1].lower()
 
-if mode not in ['normal', 'short']:
-    print("Error: mode must be 'normal' or 'short'")
+if mode not in ['normal', 'short', 'short_multi']:
+    print("Error: mode must be 'normal', 'short_multi' or 'short'")
     sys.exit(1)
 
 print(f"=== ANALYZING {mode.upper()} RANGE DATA ===\n")
@@ -157,6 +157,8 @@ print(f"=== ANALYZING {mode.upper()} RANGE DATA ===\n")
 events_file = "events_handled.txt"
 if mode == 'short':
     events_file = "short_events_handled.txt"
+elif mode == 'short_multi':
+    events_file = "short_multi_events_handled.txt"
 events_counts = load_events_counts(events_file)
 expected_runs = len(events_counts)
 
@@ -167,6 +169,8 @@ for i in range(5):
 
     if mode == 'short':
         robot_file = f"short_robot{i}.txt"
+    elif mode == 'short_multi':
+        robot_file = f"short_multi_robot{i}.txt"
     if os.path.exists(robot_file):
         runs = load_robot_file(robot_file, expected_runs)
         all_robots[i] = runs
