@@ -219,7 +219,7 @@ simulation = Simulation()
 simulation.run_simulation()
 print(f"Simulation completed. Total completed tasks: {simulation.statistics.completed_tasks}")
 
-#plot_active_robots(simulation.statistics.robot_working, simulation.dt)
+plot_active_robots(simulation.statistics.robot_working, simulation.dt)
 
 average_robot_working = np.array(simulation.statistics.robot_working)*1
 
