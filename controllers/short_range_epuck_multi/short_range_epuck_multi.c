@@ -49,9 +49,9 @@ WbDeviceTag leds[10];
 #define MAX_WORK_TIME (120.0*1000) // 120s of maximum work time
 #define MAX_SIMULATION_TIME (180.0*1000) // 180s of simulation time
 #define MAX_TASKS 3
-#define RATE_OF_MOVEMENT 5.0 // how much time required to travel 1 unit of distance (2 seconds per meter travelled)
+#define RATE_OF_MOVEMENT 30.0 // how much time required to travel 1 unit of distance (2 seconds per meter travelled)
 
-#define AVG_TASK_PER_SECOND (300.0/(MAX_SIMULATION_TIME*NUM_ROBOTS))*1000
+#define AVG_TASK_PER_SECOND (100.0/(MAX_SIMULATION_TIME*NUM_ROBOTS))*1000
 
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
@@ -205,7 +205,7 @@ void recalculate_marginal_bids()
     
     if (targets_added == 0) return;
 
-    // The bid for every task in the final route must be its cost of removal (its current marginal cost).
+    // The bid for every task marginal
     for (int q = 0; q < targets_added; q++) {
         int event_id_to_check = (int)round(target[q][2]);
         
@@ -231,11 +231,11 @@ void recalculate_marginal_bids()
             double current_marginal_cost;
             
             if (q == targets_added - 1) {
-                // Last task: Marginal cost is just travel from previous task + completion time.
+ 
                 double d_pre_to_i = calculate_distance_walls(pre_x, pre_y, target[q][0], target[q][1]);
                 current_marginal_cost = (RATE_OF_MOVEMENT * d_pre_to_i) + task_completion_time;
             } else {
-                // Task in the middle: Recalculate based on Savings Heuristic.
+
                 double post_x = target[q + 1][0];
                 double post_y = target[q + 1][1];
                 
@@ -243,13 +243,13 @@ void recalculate_marginal_bids()
                 double d_i_to_post = calculate_distance_walls(target[q][0], target[q][1], post_x, post_y);
                 double d_pre_to_post = calculate_distance_walls(pre_x, pre_y, post_x, post_y);
                 
-                // Marginal Cost = (Travel(pre->i) + Completion(i) + Travel(i->post)) - Travel(pre->post)
+                
                 current_marginal_cost = (RATE_OF_MOVEMENT * (d_pre_to_i + d_i_to_post) 
                                         + task_completion_time)
                                         - (RATE_OF_MOVEMENT * d_pre_to_post);
             }
             
-            // Update the bid and claim the task (since this calculation is only run for tasks IN our route)
+            // Update the bid 
             target_bids[bid_idx].value = current_marginal_cost;
             target_bids[bid_idx].winner_id = robot_id;
             target_bids[bid_idx].pos_x = my_pos[0]; 
@@ -263,24 +263,24 @@ void greedy_route_choice()
     int i, k, q;
     int targets_added = 0;
     
-    // 1. Determine the Current Route Length
+    //Determine the Current Route Length
     for (targets_added = 0; targets_added < MAX_TASKS; targets_added++) {
         if (target[targets_added][2] == INVALID) {
             break;
         }
     }
     
-    // EXIT CONDITION: If the target list is already full (targets_added == MAX_TASKS), return.
+   //If the target list is already full do not add
     if (targets_added == MAX_TASKS) {
         target_valid = 1;
         recalculate_marginal_bids();
         return;
     }
     
-    // Tracks which events (by target_bids index) are currently in the route.
+    // Use for not lookign at same event
     bool added_events[10] = {0}; 
     
-    // Mark tasks already in the current route as 'added'.
+    // add alreday existing events
     for (q = 0; q < targets_added; q++) {
         int event_id = (int)round(target[q][2]);
         for (i = 0; i < 10; i++) {
@@ -291,20 +291,20 @@ void greedy_route_choice()
         }
     }
 
-    // Main loop: iteratively find and insert the single best task
+    // Main loop
     while (targets_added < MAX_TASKS)
     {
-        // Search variables for the best insertion
-        int best_task_idx = -1;          // Index in target_bids of the task to insert
-        int best_insertion_slot = -1;    // The optimal position (0 to targets_added) in the current route
+        // initialize
+        int best_task_idx = -1;         
+        int best_insertion_slot = -1;   
         double min_marginal_cost = 1.0/0.0; // Infinity
         
-        // 2. Evaluate all unassigned, claimed tasks for optimal insertion point
+        // Evaluate all in target_bids
         for (i = 0; i < 10; i++)
         {  
               //printf("Robot %d: BID time VALUE %f and winner id %d \n", robot_id, target_bids[i].value, target_bids[i].winner_id);
-            // Only consider tasks that are valid, not yet in the route, AND we are the current winner
-            if (!added_events[i] && target_bids[i].event_id != INVALID && target_bids[i].winner_id == robot_id )
+            // Only consider tasks some tasks
+            if (!added_events[i] && target_bids[i].event_id != INVALID && (target_bids[i].winner_id == robot_id || calculate_time_value(target_bids[i].value) > 1.0))
             {
                 double task_completion_time;
                 if (target_bids[i].event_type == 0) {
@@ -313,23 +313,22 @@ void greedy_route_choice()
                     task_completion_time = (robot_id % 2 == 0) ? 1 : 5;
                 }
                 
-                // Try inserting task i into every possible slot k
+                // Try every insert pos 
                 for (k = 0; k <= targets_added; k++)
                 {
-                    // a) Determine the 'pre' position (start of segment)
+                    // pre position
                     double pre_x = (k == 0) ? my_pos[0] : target[k - 1][0];
                     double pre_y = (k == 0) ? my_pos[1] : target[k - 1][1];
                     
-                    // b) Calculate distance from pre to i 
+                    // pre to i
                     double d_pre_to_i = calculate_distance_walls(pre_x, pre_y, 
                                                                  target_bids[i].event_x, 
                                                                  target_bids[i].event_y);
-                    
-                    // c) Calculate the marginal cost of insertion
+ 
                     double marginal_cost_k;
                     
                     if (k < targets_added) {
-                        // Insertion between two existing tasks (or start/first task)
+                        // Insertion between
                         double post_x = target[k][0];
                         double post_y = target[k][1];
                         
@@ -338,17 +337,16 @@ void greedy_route_choice()
                                                                     target_bids[i].event_y, 
                                                                     post_x, post_y);
                         
-                        // Marginal Cost: (Travel(pre->i) + Completion(i) + Travel(i->post)) - Travel(pre->post)
+                        // Marginal Cost
                         marginal_cost_k = (RATE_OF_MOVEMENT * (d_pre_to_i + d_i_to_post) 
                                         + task_completion_time)
                                         - (RATE_OF_MOVEMENT * d_pre_to_post);
                     } else {
-                        // Insertion at the end of the route
-                        // Marginal Cost: Travel(pre->i) + Completion(i)
+                        // Insertion at the end
                         marginal_cost_k = (RATE_OF_MOVEMENT * d_pre_to_i) + task_completion_time;
                     }
                     
-                    // d) Check if this insertion is the best so far for *any* task
+                    // Check if this insertion is the best so far for all target_bids tasks
                     if (marginal_cost_k < min_marginal_cost) {
                         min_marginal_cost = marginal_cost_k;
                         best_task_idx = i;
@@ -357,22 +355,21 @@ void greedy_route_choice()
                 }
             }
         }
+
         
-        // 3. Commit or Stop
-        
-        // If no profitable task found, stop.
-        if (best_task_idx == -1 || calculate_time_value(min_marginal_cost) >= 1) {
+        // If no task or to costly, dont save
+        if (best_task_idx == -1 || calculate_time_value(min_marginal_cost) > 1) {
             break; 
         }
 
-        // Commit: Shift existing tasks to make space for the new one
+        // Shift previous
         for (k = targets_added; k > best_insertion_slot; k--) {
             target[k][0] = target[k - 1][0];
             target[k][1] = target[k - 1][1];
             target[k][2] = target[k - 1][2]; 
         }
         
-        // Insert the best task into its optimal slot
+        // Insert task inte best position
         target[best_insertion_slot][0] = target_bids[best_task_idx].event_x;
         target[best_insertion_slot][1] = target_bids[best_task_idx].event_y;
         target[best_insertion_slot][2] = target_bids[best_task_idx].event_id;
@@ -382,7 +379,7 @@ void greedy_route_choice()
         targets_added++;
     }
     
-    // Clear any tasks that might have been in the route but were implicitly removed
+    //Clear any tasks that might have been in the route but were implicitly removed
     for (q = targets_added; q < MAX_TASKS; q++) {
         target[q][2] = INVALID;
     }
@@ -1100,7 +1097,7 @@ void broadcast_targets()
 
 void receive_local_bids()
 {
-    greedy_route_choice();
+    //greedy_route_choice();
     recalculate_marginal_bids();
     
     bid_t received_bid;
@@ -1153,20 +1150,12 @@ void receive_local_bids()
                     {
                         if (target[x][2] == round(received_bid.event_id))
                         { 
-                              double d_self = calculate_distance_walls(my_pos[0], my_pos[1], target[x][0], target[x][1]);
-                              double d_other = calculate_distance_walls(received_bid.pos_x, received_bid.pos_y, target[x][0], target[x][1]);
-                              
-                              //if (d_self < d_other){
-                                     //target_bids[i].value = received_bid.value - 0.001;
-                                     //target_bids[i].winner_id = robot_id;
-                               //} else {
-                                     new_route = true;
-                                     for (q = x; q < MAX_TASKS; q++){
-                                             target[q][2] = INVALID;
-                                     }
-                                     break;
-                               //}
-                                     
+                           new_route = true;
+                           for (q = 0; q < MAX_TASKS; q++){
+                                   target[q][2] = INVALID;
+                           }
+                           break;
+
                         }
                     }
                     
@@ -1174,12 +1163,12 @@ void receive_local_bids()
                 break; // Exit for loop when finding match that changes path
             }
         }
-    }
-
-    if (new_route) {
-        new_route = false; 
-        greedy_route_choice();
-    }
+        
+        if (new_route) {
+            new_route = false; 
+            greedy_route_choice();
+        }
+    } 
 }
 
 
