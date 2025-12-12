@@ -60,7 +60,13 @@ def main():
             "robot2.txt",
             "robot3.txt",
             "robot4.txt",
-            "webots_done"
+            "webots_done",
+            "task_completion_time0.txt",
+            "task_completion_time1.txt",
+            "task_completion_time2.txt",
+            "task_completion_time3.txt",
+            "task_completion_time4.txt"
+
         ]
 
     print("All temporary files will be deleted (if they exist)")

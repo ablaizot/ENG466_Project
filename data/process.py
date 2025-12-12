@@ -2,11 +2,46 @@ import os
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
-import argparse
+import glob
 
+def load_task_completion_times(mode):
+    """
+    Load task completion times from task_completion_timeX.txt files.
+    If mode is 'short', looks for short_task_completion_timeX.txt (if they exist)
+    or just assumes the standard naming if that's how the simulation outputs them.
+    Based on the file list, it seems they are named task_completion_timeX.txt.
+    """
+    all_times = []
+    
+    # Determine file pattern based on mode if necessary. 
+    # Assuming the user wants to plot from the files present in the directory.
+    # If there are specific 'short_' versions, we should target them.
+    # Based on previous `ls`, we saw `task_completion_timeX.txt`.
+    
+    pattern = "task_completion_time*.txt"
+    if mode == 'short':
+         # Check if short versions exist, otherwise fallback or assume shared
+         if glob.glob("short_task_completion_time*.txt"):
+             pattern = "short_task_completion_time*.txt"
+    
+    files = glob.glob(pattern)
+    
+    if not files:
+        print(f"No task completion time files found matching {pattern}")
+        return []
 
-#### HOW TO USE? Run this file with 'python process.py run_to_plot'
-
+    for filename in files:
+        try:
+            with open(filename, 'r') as f:
+                times = [float(line.strip()) for line in f if line.strip()]
+                # Convert ms to seconds if the values are large (e.g. > 1000)
+                # The sample showed 8704, which is likely ms.
+                times_s = [t / 1000.0 for t in times]
+                all_times.extend(times_s)
+        except Exception as e:
+            print(f"Error reading {filename}: {e}")
+            
+    return all_times
 
 def compute_work_fraction(run):
     """
@@ -81,6 +116,8 @@ def load_events_counts(path="events_handled.txt"):
     with open(path, "r") as f:
         return [int(line.strip()) for line in f if line.strip()]
 
+# Removed the conflicting load_task_completion_times definition here
+# as it was redefining the one we added at the top of the file.
 
 def load_robot_file(filename, expected_runs):
     """Load and parse a robotX.txt file containing multiple runs."""
@@ -224,56 +261,82 @@ print(f"Standard deviation:   {std_tasks:.2f}")
 
 
 # -----------------------------------------------------------
-# CHOOSE RUN
+# PLOT: Histogram of task completion times from files
 # -----------------------------------------------------------
 
-parser = argparse.ArgumentParser(description="Plot number of robots working for a given run.")
-parser.add_argument("run_index", type=int, help="Index of the run to plot (0-based)")
-args = parser.parse_args()
-run_index = args.run_index
+task_times_from_files = load_task_completion_times(mode)
 
-# Collect work fractions for all robots
-robot_curves = []
-
-for robot_id, runs in all_robots.items():
-    if run_index < len(runs):
-        wf = compute_work_fraction(runs[run_index])
-        robot_curves.append(wf)
-    else:
-        print(f"Robot {robot_id} missing run {run_index}.")
-
-# Ensure all curves have the same length (truncate to shortest)
-min_len = min(len(c) for c in robot_curves)
-robot_curves = [c[:min_len] for c in robot_curves]
-
-# Sum: how many robots are working at each step
-total_working = np.sum(robot_curves, axis=0)
-tasks_completed = events_counts[run_index]
+if task_times_from_files:
+    plt.figure(figsize=(10, 6))
+    plt.hist(task_times_from_files, bins=30, edgecolor='black', alpha=0.7, color='skyblue')
+    plt.xlabel("Task Completion Time (s)")
+    plt.ylabel("Frequency")
+    plt.title(f"Histogram of Task Completion Times (from files) - {mode} mode")
+    
+    # Add mean and std dev to plot
+    mean_time = np.mean(task_times_from_files)
+    std_time = np.std(task_times_from_files)
+    plt.axvline(mean_time, color='red', linestyle='dashed', linewidth=1, label=f'Mean: {mean_time:.2f}s')
+    plt.legend()
+    
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+else:
+    print("No task completion time data found in files.")
 
 # -----------------------------------------------------------
-# COMPUTE X-AXIS IN SECONDS
+# PLOT AVERAGE CURVE ACROSS ALL RUNS
 # -----------------------------------------------------------
 
-# We'll use robot 0 as reference
-ref_run = all_robots[0][run_index]
-sim_times = [rec["sim_ms"] for rec in ref_run["records"][1:min_len+1]]  # skip first delta
-x_seconds = np.array(sim_times) / 1000.0  # convert ms -> s
+all_run_curves = []
 
-# -----------------------------------------------------------
-# PLOT: robots working vs. real seconds with fixed y-axis and x-ticks
-# -----------------------------------------------------------
+for r in range(expected_runs):
+    # Collect work fractions for all robots in run r
+    robot_curves_this_run = []
+    valid_run = True
+    for robot_id, runs in all_robots.items():
+        if r < len(runs):
+            wf = compute_work_fraction(runs[r])
+            robot_curves_this_run.append(wf)
+        else:
+            valid_run = False
+            break
+    
+    if valid_run and robot_curves_this_run:
+        # Truncate to shortest robot in this run
+        if len(robot_curves_this_run) > 0:
+            min_len = min(len(c) for c in robot_curves_this_run)
+            robot_curves_this_run = [c[:min_len] for c in robot_curves_this_run]
+            
+            # Sum robots for this run
+            total_working_run = np.sum(robot_curves_this_run, axis=0)
+            all_run_curves.append(total_working_run)
 
-plt.figure(figsize=(10, 4))
-plt.plot(x_seconds, total_working, linewidth=2)
-plt.xlabel("Time (s)")
-plt.ylabel("Average number of robots working")
-plt.ylim(0, 5.5)  # fixed y-axis for consistency
-
-# Set x-axis ticks every 20 seconds
-max_time = int(np.ceil(x_seconds[-1]))
-plt.xticks(np.arange(0, max_time + 1, 20))
-
-plt.title(f"Run {run_index}: robots working over time — tasks completed = {tasks_completed}")
-plt.grid(True)
-plt.tight_layout()
-plt.show()
+if all_run_curves:
+    # Truncate to shortest run to average them
+    final_min_len = min(len(c) for c in all_run_curves)
+    all_run_curves_truncated = [c[:final_min_len] for c in all_run_curves]
+    
+    # Average
+    avg_curve = np.mean(all_run_curves_truncated, axis=0)
+    
+    # Plot
+    plt.figure(figsize=(10, 4))
+    
+    # Plot individual runs faintly
+    for c in all_run_curves:
+        plt.plot(c, color='gray', alpha=0.15)
+        
+    plt.plot(avg_curve, color='blue', linewidth=2, label='Average')
+    
+    plt.xlabel("Time step (≈1.024 s each)")
+    plt.ylabel("Number of robots working")
+    plt.ylim(0, 5.5)  # fixed y-axis range for consistency
+    plt.title(f"Average robots working over {len(all_run_curves)} runs ({mode} mode)")
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+else:
+    print("No valid runs found to plot.")

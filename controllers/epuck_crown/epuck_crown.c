@@ -79,7 +79,8 @@ int stat_avoiding_time = 0;
 int stat_task_time = 0;
 int stat_idle_time = 0;
 
-int worked_time = 0;
+uint16_t worked_time = 0;
+uint16_t task_work_time = 0;
 
 // Proximity and radio handles
 WbDeviceTag emitter_tag, receiver_tag;
@@ -259,9 +260,22 @@ static void receive_updates()
                     }
                     target[i+1][2] = INVALID;
                     if(target_list_length-1 == 0) target_valid = 0; //used in general state machine 
-                    target_list_length = target_list_length-1;    
+                    target_list_length = target_list_length-1;
+                                // print completion time for this task
+                
+                        printf("Task completion time for robot %d: %d\n", robot_id, task_work_time);
+                        char filename[64];
+                        sprintf(filename, "../../tmp/task_completion_time%d.txt", robot_id);
+                        FILE* f = fopen(filename, "a");
+                        if (f) {
+                            fprintf(f, "%d\n", task_work_time);
+                            fclose(f);
+                        }
+                        task_work_time = 0;
+                    
                 }
-            }
+
+        }
             // adjust target list length
         }
         else if(msg.event_state == MSG_EVENT_WON)
@@ -278,6 +292,10 @@ static void receive_updates()
             target[msg.event_index][2] = msg.event_id;
             target_valid = 1; //used in general state machine
             target_list_length = target_list_length+1;
+            if(msg.event_index == 0)
+            {
+                task_work_time = 0; // reset task work time for new task
+            }
         }
         // check if new event is being auctioned
         else if(msg.event_state == MSG_EVENT_NEW)
@@ -583,6 +601,8 @@ void run(int ms)
 
     if (state != STAY && state != DISABLED) {
         worked_time += ms;
+        task_work_time += ms;
+        
         //printf("Worked for %d \n", worked_time);
     }
 
