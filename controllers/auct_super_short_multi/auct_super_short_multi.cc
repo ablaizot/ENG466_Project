@@ -1,0 +1,666 @@
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+ * file:        auct_super.cc
+ * author:      
+ * description: Supervisor for market-based task allocation (DIS lab05)
+ *
+ * $Revision$	February 2016 by Florian Maushart
+ * $Date$
+ * $Author$   Last update 2024 by Wanting Jin
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+#include <assert.h>
+#include <bitset>
+#include <cstdlib>
+#include <cstdio>
+#include <cmath>
+#include <map>
+
+#include <vector>
+#include <memory>
+#include <time.h>       /* time_t, struct tm, difftime, time, mktime */
+
+using namespace std;
+
+#include "Point2d.h"
+#include "message.h"
+
+#include <webots/emitter.h>
+#include <webots/receiver.h>
+#include <webots/supervisor.h>
+#include <webots/robot.h>
+
+#define DBG(x) printf x
+#define RAND ((float) rand()/RAND_MAX)
+
+#define MAX_ROBOTS 9
+#define MAX_EVENTS 10
+
+#define STEP_SIZE 64            // simulation step size
+#define AUCTION_TIMEOUT 1000    // number of steps after which an auction stops
+
+#define EVENT_RANGE (0.1)      // distance within which a robot must come to do event
+#define EVENT_TIMEOUT (10000)   // ticks until an event auction runs out
+#define WAITING_TIMEOUT (10000)   // ticks until an event auction runs out
+#define EVENT_GENERATION_DELAY (1000) // average time between events ms (expo distribution)
+
+#define GPS_INTERVAL (500)
+
+// Parameters that can be changed
+#define NUM_ROBOTS 5                 // Change this also in the epuck_crown.c!
+#define NUM_ACTIVE_EVENTS 10          // number of active events
+#define TOTAL_EVENTS_TO_HANDLE  50   // Events after which simulation stops or...
+#define MAX_RUNTIME (3*60*1000)      // ...total runtime after which simulation stops: 3 minutes
+//
+
+WbNodeRef g_event_nodes[MAX_EVENTS];
+vector<WbNodeRef> g_event_nodes_free;
+
+double gauss(void) 
+{
+  double x1, x2, w;
+  do {
+      x1 = 2.0 * RAND - 1.0;
+      x2 = 2.0 * RAND - 1.0;
+      w = x1*x1 + x2*x2;
+  } while (w >= 1.0);
+
+  w = sqrt((-2.0 * log(w))/w);
+  return(x1*w);
+}
+
+double rand_coord() {
+  // return -1.0 + 2.0*RAND;
+  return -0.6225+1.2*RAND;
+}
+
+double expovariate(double mu) {
+  double uniform = RAND;
+  while (uniform < 1e-7) uniform = RAND;
+  return -log(uniform) * mu;
+}
+
+// Event class
+class Event {
+
+// Public variables
+public:
+  uint16_t id_;          //event id
+  Point2d pos_;          //event pos
+  WbNodeRef node_;       //event node ref
+  uint16_t assigned_to_; //id of the robot that will handle this event
+  uint8_t task_type_;    //type of task 0 is type A, 1 is type B
+  map<uint16_t, uint16_t> robot_time_in_range_; // Track time in range per robot
+
+  // Auction data
+  uint64_t t_announced_;        //time at which event was announced to robots
+  bitset<NUM_ROBOTS> bids_in_;
+  uint16_t best_bidder_;        //id of the robot that had the best bid so far
+  double best_bid_;             //value of the best bid (lower is better)
+  uint64_t t_done_;             //time at which the assigned robot reached the event
+  uint64_t t_waiting_;             //time at which the event was set to wait
+  int bidder_index;             //index at which the bidder will put event in tasklist
+
+// Public functions
+public:
+  //Event creation
+  Event(uint16_t id) : id_(id), pos_(rand_coord(), rand_coord()),
+    assigned_to_(-1), t_announced_(-1), best_bidder_(-1), best_bid_(0.0), t_done_(-1), t_waiting_(-1)
+  {
+    node_ = g_event_nodes_free.back();  // Place node
+    g_event_nodes_free.pop_back();
+    // Randomly assign task type 0 or 1 with 1/3 type 0 and 2/3 type 1
+    task_type_ = (rand() % 3 == 0) ? 0 : 1;
+    
+    for (uint16_t i = 0; i < NUM_ROBOTS; i++) {
+      robot_time_in_range_[i] = 0;
+    }
+
+    WbFieldRef children_field = wb_supervisor_node_get_field(node_, "children");
+    WbNodeRef child = wb_supervisor_field_get_mf_node(children_field, 0);
+    WbFieldRef appearance_field = wb_supervisor_node_get_field(child, "appearance");
+    WbNodeRef appearance_node = wb_supervisor_field_get_sf_node(appearance_field);
+    WbFieldRef mat_field = wb_supervisor_node_get_field(appearance_node, "material");
+    WbNodeRef mat_node = wb_supervisor_field_get_sf_node(mat_field);
+    WbFieldRef color_field = wb_supervisor_node_get_field(mat_node, "diffuseColor");
+
+    if (task_type_ == 0) {
+      const double red_color[3] = {1, 0, 0};
+      wb_supervisor_field_set_sf_color(color_field, red_color); // type A
+    } else {
+      const double blue_color[3] = {0, 0, 1};
+      wb_supervisor_field_set_sf_color(color_field, blue_color); // type B
+    }
+
+    
+    double event_node_pos[3];           // Place event in arena
+    event_node_pos[0] = pos_.x;
+    event_node_pos[1] = pos_.y;
+    event_node_pos[2] = .03;
+    wb_supervisor_field_set_sf_vec3f(
+      wb_supervisor_node_get_field(node_,"translation"),
+      event_node_pos);
+    //printf("New event position %0.2f, %0.2f", pos_.x, pos_.y);
+  }
+
+  bool is_assigned() const { return assigned_to_ != (uint16_t) -1; }
+  bool was_announced() const { return t_announced_ != (uint64_t) -1; }
+  bool has_bids() const { return best_bidder_ != (uint16_t) -1; }
+  bool is_done() const { return t_done_ != (uint64_t) -1; }
+  bool is_waiting() const { return t_waiting_ != (uint64_t) -1; }
+
+  void restartAuction() {
+    assigned_to_ = -1;
+    t_announced_ = -1;
+    bids_in_.reset();
+    best_bidder_ = -1;
+    best_bid_ = 0.0;
+    t_done_ = -1;
+    t_waiting_ = -1;
+  }
+
+    // Check if event can be assigned
+  bool updateAuction(uint16_t bidder, double bid, int index, uint64_t clk) {
+    if (bid <= 0) {
+      restartAuction();
+      return true; 
+    }
+    if (bid >= 0.0 && (!has_bids() || bid < best_bid_)) {
+      best_bidder_ = bidder;
+      best_bid_ = bid;
+      bidder_index = index;  
+    }
+    bids_in_.set(bidder);
+    if (bids_in_.all()) {
+      if (!isinf(best_bid_)) {
+        assigned_to_ = best_bidder_;
+      } else {
+        restartAuction();
+        t_waiting_ = clk;
+        printf("No valid bids for event %d, set to wait\n", id_); 
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void markDone(uint64_t clk) {
+    t_done_ = clk;
+    double event_node_pos[3] = {-5,-5,-5};
+    pos_.x = -5.0;
+    pos_.y = -5.0;
+    
+
+    wb_supervisor_field_set_sf_vec3f(wb_supervisor_node_get_field(node_,"translation"),
+                                     event_node_pos);
+    g_event_nodes_free.push_back(node_);
+  }
+};
+
+// Supervisor class
+class Supervisor {
+
+//Private variables
+private:
+  uint64_t clock_;
+
+  uint16_t next_event_id_;
+  vector<unique_ptr<Event> > events_;
+  uint16_t num_active_events_;
+  uint64_t t_next_event_;
+  Event* auction; // the event currently being auctioned
+  uint64_t t_next_gps_tick_;
+
+  uint16_t num_events_handled_; // total number of events handled
+  double stat_total_distance_;  // total distance traveled
+  double stat_robot_prev_pos_[NUM_ROBOTS][2];
+
+  WbNodeRef robots_[NUM_ROBOTS];
+  WbDeviceTag emitter_;
+  WbDeviceTag receivers_[NUM_ROBOTS];
+
+  typedef vector<pair<Event*, message_event_state_t>> event_queue_t;
+
+// Private functions
+private:
+  void addEvent() {
+    events_.push_back(unique_ptr<Event>(new Event{next_event_id_++})); // add to list
+    assert(num_active_events_ < NUM_ACTIVE_EVENTS); // check max. active events not reached
+    num_active_events_++;
+    t_next_event_ = clock_ + expovariate(EVENT_GENERATION_DELAY);
+    // print new event with event type 0 = type A, 1 = type B
+    printf("N event %d added at (%.2f, %.2f) of type %d\n", 
+      events_.back()->id_, events_.back()->pos_.x, events_.back()->pos_.y,
+      events_.back()->task_type_);    
+  }
+
+  // Init robot and get robot_ids and receivers
+  void linkRobot(uint16_t id) {
+    const char kRobotNameFormat[] = "e-puck%d";
+    const char kReceiverNameFormat[] = "rec%d";
+    char node_name[16];
+
+    // Get the robot node's handle
+    sprintf(node_name, kRobotNameFormat, id);
+    printf("Linking robot node: %s\n", node_name);
+    robots_[id] = wb_supervisor_node_get_from_def(node_name);
+    if (!robots_[id]) {
+      DBG(("Missing node for robot #%d\n", id));
+      exit(1);
+    }
+
+    // Get the respective receiver
+    sprintf(node_name, kReceiverNameFormat, id); 
+    receivers_[id] = wb_robot_get_device(node_name);
+    if (!receivers_[id]) {
+      DBG(("Missing receiver for robot #%d\n", id));
+      exit(1);
+    }
+    wb_receiver_enable(receivers_[id], 2); //32
+    wb_receiver_set_channel(receivers_[id], id+1);
+    // print receiver channel linking
+    printf("Linked receiver for robot %d on channel %d\n", id, wb_receiver_get_channel(receivers_[id]));
+  }
+
+  // Assemble a new message to be sent to robots
+  void buildMessage(uint16_t robot_id, const Event* event,
+      message_event_state_t event_state, message_t* msg) {
+    WbFieldRef f_rot = wb_supervisor_node_get_field(robots_[robot_id],
+                                                    "rotation");
+    const double *pos = getRobotPos(robot_id);
+    const double *rot = wb_supervisor_field_get_sf_rotation(f_rot);
+
+    msg->robot_id = robot_id;
+    msg->robot_x = pos[0]; // no gps noise used here
+    msg->robot_y = pos[1]; // no gps noise used here
+    double heading = -rot[2] *rot[3]; // no gps noise used here
+    msg->heading = heading > 2*M_PI ? heading - 2*M_PI : heading;
+    msg->event_state = event_state;
+    msg->event_id = -1;
+    msg->event_x = 0.0;
+    msg->event_y = 0.0;
+    msg->event_type = -1;
+
+    if (event) {
+      assert(event_state != MSG_EVENT_INVALID && 
+             event_state != MSG_EVENT_GPS_ONLY);
+      msg->event_id = event->id_;
+      msg->event_x = event->pos_.x;
+      msg->event_y = event->pos_.y;
+      msg->event_index = event->bidder_index;
+      msg->event_type = event->task_type_;
+    }
+  }
+
+  const double* getRobotPos(uint16_t robot_id) {
+    WbFieldRef f_pos = wb_supervisor_node_get_field(robots_[robot_id],
+      "translation");
+    return wb_supervisor_field_get_sf_vec3f(f_pos);
+  }
+
+  void setRobotPos(uint16_t robot_id, double x, double y) {
+    WbFieldRef f_pos = wb_supervisor_node_get_field(robots_[robot_id],
+      "translation");
+    double pos[3] = {x, y, 0.001};
+    return wb_supervisor_field_set_sf_vec3f(f_pos, pos);
+  }
+
+  // Marks one event as done, if one of the robots is within the range
+  // An odd number robot takes 3 second to do a type A task, even number robot takes 9 second to do type A task
+  // An odd number robot takes 5 second to do a type B task, even number robot takes 1 second to do type B task
+  void markEventsDone(event_queue_t& event_queue) {
+    for (auto& event : events_) {
+        // if (!event->is_assigned() || event->is_done())
+        //     continue;
+        for (int i=0; i<NUM_ROBOTS; ++i) {
+            const double *robot_pos = getRobotPos(i);
+            // Get robot position of all robots and check distance
+            Point2d robot_pos_pt(robot_pos[0], robot_pos[1]);
+            double dist = event->pos_.Distance(robot_pos_pt);
+
+          if (dist <= EVENT_RANGE) {
+              // Get task completion time based on robot ID and task type
+              uint64_t completion_time;
+              bool is_even_robot = (i % 2 == 0);
+              
+              if (event->task_type_ == 0) { // Type A task
+                  completion_time = is_even_robot ? 9000: 3000; // 3 or 9 seconds in ms
+              } else { // Type B task
+                  completion_time = is_even_robot ? 1000: 5000; // 5 or 1 seconds in ms
+              }
+
+              // Increment time in range
+              
+              event->robot_time_in_range_[i] += STEP_SIZE;
+              // printf("Robot %d is within range of event %d, time in range: %u ms\n", 
+              //     i, event->id_, event->robot_time_in_range_[i]);
+              // Check if robot has been in range long enough
+              if (event->robot_time_in_range_[i] >= completion_time) {
+                  printf("D robot %d completed event %d after %u ms in range\n", 
+                      i, event->id_, event->robot_time_in_range_[i]);
+                  num_events_handled_++;
+                  
+                  event->markDone(clock_);
+                  num_active_events_--;
+                  event->robot_time_in_range_[i] = 0;
+                  event_queue.emplace_back(event.get(), MSG_EVENT_DONE);
+                  restartWaitingEvents(event_queue);
+                  
+              }
+               
+          } else {
+              // Reset time in range if robot moves out of range
+              event->robot_time_in_range_[i] = 0;
+          }
+        }
+    }
+  }
+
+  // void handleAuctionEvents(event_queue_t& event_queue) {
+  //   // For each unassigned event
+  //   for (auto& event : events_) {
+  //     if (event->is_assigned()) continue;
+
+  //     if (event->is_waiting() && clock_ - event->t_waiting_ <= WAITING_TIMEOUT) continue; // announce again if waiting too long
+
+  //     // Send announce, if new
+  //     // IMPL DETAIL: Only allow one auction at a time.
+  //     if ((!event->was_announced()) && !auction) {
+  //       event->t_announced_ = clock_;
+  //       event->t_waiting_ = -1;
+  //       event_queue.emplace_back(event.get(), MSG_EVENT_NEW); 
+  //       auction = event.get();
+  //       printf("A event %d announced\n", event->id_);
+
+  //     // End early or restart, if timed out
+  //     } else if (clock_ - event->t_announced_ > EVENT_TIMEOUT && event->was_announced()) {
+  //       // End early if we have any bids at all
+  //       if (event->has_bids() && !isinf(event->best_bid_)) {
+  //         // IMPLEMENTATION DETAIL: If about to time out, assign to
+  //         // the highest bidder or restart the auction if there is none.
+  //         event->assigned_to_ = event->best_bidder_;
+  //         event_queue.emplace_back(event.get(), MSG_EVENT_WON); // FIXME?
+  //         auction = NULL;
+          
+  //         printf("W robot %d won event %d\n", event->assigned_to_, event->id_);
+
+  //       // Restart (incl. announce) if no bids
+  //       } else {
+  //         // (reannounced in next iteration)
+  //         event->restartAuction();
+  //         event->t_waiting_ = clock_;
+  //         printf("Auction for event %d failed, set to wait\n", event->id_);
+  //         if (auction == event.get())
+  //           auction = NULL;
+  //       }
+  //     }
+  //   }
+  // }
+
+  void restartWaitingEvents(event_queue_t& event_queue) {
+    // For each waiting event
+    for (auto& event : events_) {
+      if (event->is_assigned() || event->is_done() || event->was_announced()) continue;
+
+      if (event->is_waiting())
+        event->t_waiting_ = -1;
+    }
+  }
+
+  // void handleRobotBiddings(event_queue_t& event_queue) {
+  //   // Send and receive messages
+  //   bid_t* pbid; // inbound
+  //   for (int i=0;i<NUM_ROBOTS;i++) {
+  //     // Check if we're receiving data
+  //     if (wb_receiver_get_queue_length(receivers_[i]) > 0) {
+  //       //printf("Receiving bid from robot %d\n", i);
+  //       assert(wb_receiver_get_queue_length(receivers_[i]) > 0);
+  //       assert(wb_receiver_get_data_size(receivers_[i]) == sizeof(bid_t));
+        
+  //       pbid = (bid_t*) wb_receiver_get_data(receivers_[i]); 
+  //       assert(pbid->robot_id == i);
+  //       printf("B robot %d bid %.2f for event %d\n", pbid->robot_id,
+  //         pbid->value, pbid->event_id);
+  //       Event* event = events_.at(pbid->event_id).get();
+  //       bool auction_failed = event->updateAuction(pbid->robot_id, pbid->value, pbid->event_index, clock_);
+
+  //       if (auction_failed && auction == event)
+  //           auction = NULL;
+
+  //       // TODO: Refactor this (same code above in handleAuctionEvents)
+  //       if (event->is_assigned()) {
+  //         event_queue.emplace_back(event, MSG_EVENT_WON);
+  //         auction = NULL;
+  //         printf("W robot %d won event %d\n", event->assigned_to_, event->id_);
+  //       }
+
+  //       wb_receiver_next_packet(receivers_[i]);
+  //     }
+  //   }
+  // }
+
+  // Calculate total distance travelled by robots
+  void statTotalDistance() {
+    for (int i=0; i<NUM_ROBOTS; ++i) {
+      const double *robot_pos = getRobotPos(i);
+      double delta[2] = {
+        robot_pos[0] - stat_robot_prev_pos_[i][0],
+        robot_pos[1] - stat_robot_prev_pos_[i][1]
+      };
+      stat_total_distance_ += sqrt(delta[0]*delta[0] + delta[1]*delta[1]);
+      stat_robot_prev_pos_[i][0] = robot_pos[0];
+      stat_robot_prev_pos_[i][1] = robot_pos[1];
+    }
+  }
+
+// Public fucntions
+public:
+  Supervisor() : events_(MAX_EVENTS){}
+  
+  // Reset robots & events
+  void reset() {
+    clock_ = 0;
+
+    // initialize & link events
+    next_event_id_ = 0;
+    events_.clear();
+    num_active_events_ = 0;
+    t_next_event_ = 0; // invalid state
+    auction = NULL;
+    t_next_gps_tick_ = 0;
+
+    num_events_handled_ = 0;
+    stat_total_distance_ = 0.0;
+
+
+
+    // link & initialize robots
+    for (int i=0;i<NUM_ROBOTS;i++) {
+      linkRobot(i);
+
+      double pos[2] = {rand_coord(), rand_coord()};
+      setRobotPos(i, pos[0], pos[1]);
+      stat_robot_prev_pos_[i][0] = pos[0];
+      stat_robot_prev_pos_[i][1] = pos[1];
+    }
+
+    // initialize the emitter
+    emitter_ = wb_robot_get_device("sup_emitter");
+    if (!emitter_) {
+      DBG(("Missing supervisor emitter!\n"));
+      exit(1);
+    }
+    event_queue_t event_queue;
+
+    // add the first few events
+    for (int i=0; i<NUM_ACTIVE_EVENTS; ++i) {
+      addEvent();
+      Event* event = events_.back().get();
+      event->t_announced_ = clock_;
+      event->t_waiting_ = -1;
+      event_queue.emplace_back(event, MSG_EVENT_NEW);
+      printf("A event %d announced\n", event->id_);
+    }
+
+    // outbound
+    message_t msg;
+
+     for (int i=0;i<NUM_ROBOTS;i++) {
+      // Send updates to the robot
+      while (wb_emitter_get_channel(emitter_) != i+1)
+      wb_emitter_set_channel(emitter_, i+1);
+      
+      for (const auto& e_es_tuple : event_queue) {
+        const Event* event = e_es_tuple.first;
+        const message_event_state_t event_state = e_es_tuple.second;
+
+        // Robot might accidentaly complete task of other robot -> send event done to everyone
+        if (event->is_assigned() && event->assigned_to_ != i && !event->is_done()) continue; 
+
+        buildMessage(i, event, event_state, &msg);
+        while (wb_emitter_get_channel(emitter_) != i+1)
+              wb_emitter_set_channel(emitter_, i+1);        
+//        printf("> Sent message to robot %d // event_state=%d\n", i, event_state);
+//        printf("sending message event %d , robot %d , emitter %d, channel %d\n",msg.event_id,msg.robot_id,emitter_,      wb_emitter_get_channel(emitter_));
+        
+        wb_emitter_send(emitter_, &msg, sizeof(message_t));
+      }
+    }
+
+  }
+
+  //Do a step
+  bool step(uint64_t step_size) {
+    
+    clock_ += step_size;
+
+    // Events that will be announced next or that have just been assigned/done
+    event_queue_t event_queue;
+
+    // Check if events are done or not
+    markEventsDone(event_queue);
+
+    // ** Add a random new event, if the time has come
+    if (num_active_events_ < NUM_ACTIVE_EVENTS) {
+      addEvent();
+      Event* event = events_.back().get();
+      event->t_announced_ = clock_;
+      event->t_waiting_ = -1;
+      event_queue.emplace_back(event, MSG_EVENT_NEW);
+      printf("A event %d announced\n", event->id_);
+    }
+
+    // Check if there are any new events to announce
+    //handleAuctionEvents(event_queue);
+ 
+    // Check if robots sent any bids for events and process them
+    //handleRobotBiddings(event_queue);
+
+    // outbound
+    message_t msg;
+    bool is_gps_tick = false;
+
+    if (clock_ >= t_next_gps_tick_) {
+      is_gps_tick = true;
+      t_next_gps_tick_ = clock_ + GPS_INTERVAL;
+    }
+
+    for (int i=0;i<NUM_ROBOTS;i++) {
+      // Send updates to the robot
+      while (wb_emitter_get_channel(emitter_) != i+1)
+      wb_emitter_set_channel(emitter_, i+1);
+      
+      if (is_gps_tick) {
+        buildMessage(i, NULL, MSG_EVENT_GPS_ONLY, &msg);
+//        printf("sending message %d , %d \n",msg.event_id,msg.robot_id);
+        while (wb_emitter_get_channel(emitter_) != i+1)
+            wb_emitter_set_channel(emitter_, i+1);        
+        wb_emitter_send(emitter_, &msg, sizeof(message_t));
+      }
+
+      for (const auto& e_es_tuple : event_queue) {
+        const Event* event = e_es_tuple.first;
+        const message_event_state_t event_state = e_es_tuple.second;
+
+        // Robot might accidentaly complete task of other robot -> send event done to everyone
+        if (event->is_assigned() && event->assigned_to_ != i && !event->is_done()) continue; 
+
+        buildMessage(i, event, event_state, &msg);
+        while (wb_emitter_get_channel(emitter_) != i+1)
+              wb_emitter_set_channel(emitter_, i+1);        
+//        printf("> Sent message to robot %d // event_state=%d\n", i, event_state);
+//        printf("sending message event %d , robot %d , emitter %d, channel %d\n",msg.event_id,msg.robot_id,emitter_,      wb_emitter_get_channel(emitter_));
+        
+        wb_emitter_send(emitter_, &msg, sizeof(message_t));
+      }
+    }
+
+    // Keep track of distance travelled by all robots
+    statTotalDistance();
+
+    // Time to end the experiment?
+    if (MAX_RUNTIME > 0 && clock_ >= MAX_RUNTIME) {
+      for(int i=0;i<NUM_ROBOTS;i++){
+          buildMessage(i, NULL, MSG_QUIT, &msg);
+          wb_emitter_set_channel(emitter_, i+1);
+          wb_emitter_send(emitter_, &msg, sizeof(message_t));
+      }
+      double clock_s = ((double) clock_) / 1000.0;
+      double ehr = ((double) num_events_handled_) / clock_s;
+      double perf = ((double) num_events_handled_) / stat_total_distance_;
+      
+      printf("Handled %d events in %d seconds, events handled per second = %.2f\n",
+             num_events_handled_, (int) clock_ / 1000, ehr);
+      printf("Performance: %f\n", perf);
+
+      FILE* f = fopen("../../tmp/short_multi_events_handled.txt","a");
+      fprintf(f,"%d\n",num_events_handled_);
+      fclose(f);
+      
+      FILE* f_ack = fopen("../../tmp/webots_done","w");
+      fprintf(f_ack,"DONE!");
+      fclose(f_ack);
+      
+      return false;
+    } 
+    else { return true;} //continue
+  } // << step() <<
+};
+
+//Links up all the nodes we are interested in.
+//Gets called by webots at robot_live(reset)
+void link_event_nodes() {
+  const char kEventNameFormat[] = "e%d";
+  char node_name[16];
+  
+  for (int i=0; i<MAX_EVENTS; ++i) {
+    sprintf(node_name, kEventNameFormat, i);
+    g_event_nodes[i] = wb_supervisor_node_get_from_def(node_name);
+    g_event_nodes_free.push_back(g_event_nodes[i]);
+  }
+}
+
+// MAIN LOOP (does steps)
+int main(void) 
+{
+  Supervisor supervisor{};
+
+  // initialization
+  wb_robot_init();
+  link_event_nodes();
+  wb_robot_step(STEP_SIZE);
+
+  srand(time(NULL));
+  supervisor.reset();
+
+  // start the controller
+  printf("Starting main loop...\n");
+  while (wb_robot_step(STEP_SIZE) != -1)
+  {
+    if (!supervisor.step(STEP_SIZE)) break; //break at return = false
+  }
+  wb_supervisor_simulation_reset_physics();
+  wb_robot_cleanup();
+  exit(0);
+  return 0;
+
+}
