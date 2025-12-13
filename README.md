@@ -5,6 +5,15 @@
 	- estimate real distance to target
 - implement limited communication range
 
+# What to write
+- three levels of simulation - micro, mili and macro models
+	- microscopic is simulation of the robots and tasks including their position. It is very realistic and apart from physics and collision avoidance. Rate of movements of the robots was adapted for that and make sure to match with submicro model
+	 - From microscopic we plotted the distribution of offered task times, completed task times, and waiting times between tasks. This was then used for the subsequent models
+  	- Miliscopic simulation uses the distribution of offered task times from micro instead of spatiality. We are still simulating every robot, but instead of spawning random task, we just draw work time from the distribution.
+  	- Macroscopic is probabilistic state machine that models the distribution from micro as poisson distribution. It uses three states.
+- task time estimation - average taks annd rate of movement (real speed is 0.05m/s, but we set rate to 25s/m, to accound for 20% collision avoidance)
+- 
+
 # Notes for presentation
 - We calculate task time as the work time + estimated travel time including surpassing walls
 - We calculate expected value of staying still, based on work time of 120s out of 180s and average number of tasks a robot should complete in one second 
