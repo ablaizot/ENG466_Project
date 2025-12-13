@@ -360,11 +360,13 @@ def plot_group(group_name, scenario_keys):
         
         print(f"Processing {key}...")
         avg, std, runs = get_curves(key)
+
+        time = np.arange(len(avg)) * 1.024  # assuming each time step is approx 1.024 seconds
         
         if avg is not None:
             plotted_any = True
-            plt.plot(avg, color=conf["color"], linewidth=2, label=conf["label"])
-            plt.fill_between(range(len(avg)), avg - std, avg + std, color=conf["color"], alpha=0.15)
+            plt.plot(time, avg, color=conf["color"], linewidth=2, label=conf["label"])
+            plt.fill_between(time, avg - std, avg + std, color=conf["color"], alpha=0.15)
             print(f"  Loaded {len(runs)} runs.")
         else:
             print(f"  No data found for {key}.")
@@ -373,6 +375,8 @@ def plot_group(group_name, scenario_keys):
         plt.xlabel("Time step (≈1.024 s each)")
         plt.ylabel("Number of robots working")
         plt.ylim(0, 5.5)
+        plt.xlim(0, time[-1])
+        plt.xticks(np.arange(0, time[-1], 20))
         plt.title(f"Average robots working ({group_name})")
         plt.grid(True, alpha=0.3)
         plt.legend()

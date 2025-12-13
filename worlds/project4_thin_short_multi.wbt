@@ -14,7 +14,7 @@ WorldInfo {
 }
 Viewpoint {
   orientation -0.6135893951602219 -0.08467264884967528 0.7850723512413954 3.307460288256702
-  position 1.6987580023274262 -0.0479855487764778 6.039943295126787
+  position 1.2932302503210344 -0.0929267960561244 4.3889931900719175
 }
 Background {
   skyColor [
@@ -35,7 +35,7 @@ Robot {
   children [
     DEF sup_emitter Emitter {
       name "sup_emitter"
-      channel 3
+      channel 5
     }
     DEF rec1 Receiver {
       name "rec1"
@@ -92,11 +92,16 @@ Robot {
   supervisor TRUE
 }
 DEF e-puck0 E-puck {
-  translation -0.36923021011651674 0.6975375576210103 -6.409085575649794e-05
-  rotation 0.0006691288152868299 -0.0017932553691855152 0.999998168249227 0.7280602939650604
+  hidden position_0_0 129.83840218195638
+  hidden position_0_1 187.7207765879249
+  hidden rotation_1 0 1 0 4.174696038364653
+  hidden rotation_2 0 -0.9999999999999999 0 0.7747826274627062
+  translation 0.49973437536724014 -0.7500371017094952 -0.00011479480160500946
+  rotation 0.00010071853168050566 -3.791077919667599e-05 -0.9999999942092751 0.7332776945631416
   name "e-puck0"
   controller "short_range_epuck_multi"
   supervisor TRUE
+  emitter_channel 0
   turretSlot [
     Emitter {
       name "local_emitter"
@@ -104,7 +109,6 @@ DEF e-puck0 E-puck {
       channel 1
     }
     Receiver {
-      name "receiver"
       channel 3
     }
     Receiver {
@@ -114,21 +118,24 @@ DEF e-puck0 E-puck {
   ]
 }
 DEF e-puck1 E-puck {
-  translation -0.6113254448467565 -0.5370531096337272 -7.018217799758565e-05
-  rotation -8.412693469233174e-06 -9.549251675248533e-06 -0.9999999999190192 1.4653069302597486
+  hidden position_0_0 127.74001172843504
+  hidden position_0_1 155.9721560264239
+  hidden rotation_1 0 0.9999999999999999 0 2.0763055848433063
+  hidden rotation_2 0 1 0 5.175708654113828
+  translation 0.24991250713052993 -0.7495605610524015 -0.0001140324795605302
+  rotation 3.6353203918915515e-05 7.1472999861910406e-06 0.9999999993136804 0.382525371722651
   name "e-puck1"
   controller "short_range_epuck_multi"
   supervisor TRUE
-  emitter_channel 2
+  emitter_channel 0
   receiver_channel 2
-    turretSlot [
+  turretSlot [
     Emitter {
       name "local_emitter"
       range 0.3
       channel 1
     }
     Receiver {
-      name "receiver"
       channel 3
     }
     Receiver {
@@ -138,21 +145,24 @@ DEF e-puck1 E-puck {
   ]
 }
 DEF e-puck2 E-puck {
-  translation 0.8545568530251683 -0.49174308410102735 -9.415933186906686e-05
-  rotation 0.0004747505600848836 0.000611390121222392 0.9999997004069677 1.8243634140881906
+  hidden position_0_0 271.89383771843245
+  hidden position_0_1 125.62101025517637
+  hidden rotation_1 0 -1 0 4.566315797469354
+  hidden rotation_2 0 -1 0 0.04269588841535342
+  translation -0.0006840504827197738 -0.746380885542384 -0.00011531420927527944
+  rotation -1.483382158437572e-05 -2.2705573671396716e-05 0.9999999996322072 1.9897209378996237
   name "e-puck2"
   controller "short_range_epuck_multi"
   supervisor TRUE
-  emitter_channel 3
+  emitter_channel 0
   receiver_channel 3
-    turretSlot [
+  turretSlot [
     Emitter {
       name "local_emitter"
       range 0.3
       channel 1
     }
     Receiver {
-      name "receiver"
       channel 3
     }
     Receiver {
@@ -162,21 +172,24 @@ DEF e-puck2 E-puck {
   ]
 }
 DEF e-puck3 E-puck {
-  translation 0.5363893655552989 0.3336770561838342 -7.282393710116887e-05
-  rotation 0.0007404216614904846 -0.000398508813033931 -0.9999996464831821 -1.355117099775451
+  hidden position_0_0 174.3268727494159
+  hidden position_0_1 79.64825772929001
+  hidden rotation_1 0 -0.9999999999999999 0 1.6023158516125091
+  hidden rotation_2 0 1 0 4.250034043134971
+  translation -0.25092102090830376 -0.7489748901543491 -0.00011331371695428097
+  rotation 2.767665906966352e-06 -3.855796202136206e-06 0.9999999999887365 -2.5371420296772604
   name "e-puck3"
   controller "short_range_epuck_multi"
   supervisor TRUE
-  emitter_channel 4
+  emitter_channel 0
   receiver_channel 4
-    turretSlot [
+  turretSlot [
     Emitter {
       name "local_emitter"
       range 0.3
       channel 1
     }
     Receiver {
-      name "receiver"
       channel 3
     }
     Receiver {
@@ -186,21 +199,24 @@ DEF e-puck3 E-puck {
   ]
 }
 DEF e-puck4 E-puck {
-  translation 0.24763423451522149 -0.08636116211272075 -0.00011165164304883547
-  rotation -8.278045819075025e-05 0.00036782861379336125 0.9999999289247509 -2.7437364185200788
+  hidden position_0_0 198.39476680637216
+  hidden position_0_1 230.1888179957558
+  hidden rotation_1 0 -1 0 2.6671630233746066
+  hidden rotation_2 0 1 0 3.994146937290699
+  translation -0.5006155171132205 -0.7516097447311428 -0.00011464727604630805
+  rotation 1.2242676196360308e-05 -2.1977987066495495e-05 0.9999999996835425 -2.119041827245331
   name "e-puck4"
   controller "short_range_epuck_multi"
   supervisor TRUE
-  emitter_channel 5
+  emitter_channel 0
   receiver_channel 5
-    turretSlot [
+  turretSlot [
     Emitter {
       name "local_emitter"
       range 0.3
       channel 1
     }
     Receiver {
-      name "receiver"
       channel 3
     }
     Receiver {
@@ -210,7 +226,7 @@ DEF e-puck4 E-puck {
   ]
 }
 DEF e0 Pose {
-  translation 0 0 -0.2
+  translation 0.015056076049804634 0.5749730730056761 0.03
   children [
     Shape {
       appearance Appearance {
@@ -226,7 +242,7 @@ DEF e0 Pose {
   ]
 }
 DEF e1 Pose {
-  translation 0 0 -0.2
+  translation -0.06188720226287847 0.4600159549713134 0.03
   children [
     Shape {
       appearance Appearance {
@@ -242,12 +258,12 @@ DEF e1 Pose {
   ]
 }
 DEF e2 Pose {
-  translation 0 0 -0.2
+  translation -0.4457978224754334 -0.21610331296920782 0.03
   children [
     Shape {
       appearance Appearance {
         material Material {
-          diffuseColor 0 0 1
+          diffuseColor 1 0 0
         }
       }
       geometry Cylinder {
@@ -258,12 +274,12 @@ DEF e2 Pose {
   ]
 }
 DEF e3 Pose {
-  translation 0 0 -0.2
+  translation -0.07027368307113657 -0.41763534307479866 0.03
   children [
     Shape {
       appearance Appearance {
         material Material {
-          diffuseColor 0 0 1
+          diffuseColor 1 0 0
         }
       }
       geometry Cylinder {
@@ -274,12 +290,12 @@ DEF e3 Pose {
   ]
 }
 DEF e4 Pose {
-  translation 0 0 -0.2
+  translation 0.18014897346496572 -0.017537698745727637 0.03
   children [
     Shape {
       appearance Appearance {
         material Material {
-          diffuseColor 0 0 1
+          diffuseColor 1 0 0
         }
       }
       geometry Cylinder {
@@ -290,7 +306,7 @@ DEF e4 Pose {
   ]
 }
 DEF e5 Pose {
-  translation 0 0 -0.2
+  translation 0.27335251808166494 -0.1965104198455811 0.03
   children [
     Shape {
       appearance Appearance {
@@ -306,12 +322,12 @@ DEF e5 Pose {
   ]
 }
 DEF e6 Pose {
-  translation 0 0 -0.2
+  translation -0.03870533466339121 0.40530239582061767 0.03
   children [
     Shape {
       appearance Appearance {
         material Material {
-          diffuseColor 1 0 0
+          diffuseColor 0 0 1
         }
       }
       geometry Cylinder {
@@ -322,7 +338,7 @@ DEF e6 Pose {
   ]
 }
 DEF e7 Pose {
-  translation 0 0 -0.2
+  translation -0.557056107223034 -0.5097402101755143 0.03
   children [
     Shape {
       appearance Appearance {
@@ -338,7 +354,7 @@ DEF e7 Pose {
   ]
 }
 DEF e8 Pose {
-  translation 0 0 -0.2
+  translation 0.4328422451019287 -0.17237640380859381 0.03
   children [
     Shape {
       appearance Appearance {
@@ -354,7 +370,7 @@ DEF e8 Pose {
   ]
 }
 DEF e9 Pose {
-  translation 0 0 -0.2
+  translation -0.5154166495800019 -0.0793560004234315 0.03
   children [
     Shape {
       appearance Appearance {
