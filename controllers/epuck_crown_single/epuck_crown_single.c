@@ -45,7 +45,7 @@ WbDeviceTag leds[10];
 #define MAX_SIMULATION_TIME (180.0*1000) // 180s of simulation time
 #define MAX_TASKS 1
 #define RATE_OF_MOVEMENT 25.0 // how much time required to travel 1 unit of distance (2 seconds per meter travelled)
-#define AVG_TASK_PARAMETER 50.0
+#define AVG_TASK_PARAMETER 55.0
 
 #define AVG_TASK_PER_SECOND (AVG_TASK_PARAMETER/(MAX_WORK_TIME*NUM_ROBOTS)*1000)
 

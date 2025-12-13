@@ -49,7 +49,7 @@ WbDeviceTag leds[10];
 #define MAX_TASKS 1
 #define RATE_OF_MOVEMENT 25.0 // how much time required to travel 1 unit of distance (20 seconds per meter travelled)
 
-#define AVG_TASK_PER_SECOND (60.0/(MAX_WORK_TIME*NUM_ROBOTS)*1000)
+#define AVG_TASK_PER_SECOND (55.0/(MAX_WORK_TIME*NUM_ROBOTS)*1000)
 
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
@@ -210,7 +210,7 @@ static double calculate_tasks(bid_t target_bid)
 
         // don't bid if waiting is better
     if (calculate_time_value(task_time) > 1){ 
-           // printf("Robot %d decided not to bid for event %d due to high waiting value\n", robot_id, target_bid.event_id);           
+           //printf("%d: Robot %d decided not to bid for event %d due to high waiting value\n", clock, robot_id, target_bid.event_id);           
             task_time = 1.0/0.0;
     }
 
@@ -402,7 +402,7 @@ static void receive_updates()
             bid_t new_bid = {robot_id, msg.event_id, task_time, indx, msg.event_x, msg.event_y, msg.event_type};
             new_bid.value = calculate_tasks(new_bid);
 
-            printf("Robot %d calculated bid for event %d with value %.2f\n", robot_id, new_bid.event_id, new_bid.value);
+           // printf("Robot %d calculated bid for event %d with value %.2f\n", robot_id, new_bid.event_id, new_bid.value);
 
             // Find position to insert based on task_time (ascending order)
             int insert_pos = 0;
@@ -429,14 +429,14 @@ static void receive_updates()
             
             // Only set target if we have a valid bid at position 0
             if (target_bids[0].event_id != INVALID && target_bids[0].value >= 0 && !isinf(target_bids[0].value)) {
-                printf("Robot %d is targeting event %d with bid value %.2f\n", robot_id, target_bids[0].event_id, target_bids[0].value);
+                //printf("Robot %d is targeting event %d with bid value %.2f\n", robot_id, target_bids[0].event_id, target_bids[0].value);
                 target[0][0] = target_bids[0].event_x;
                 target[0][1] = target_bids[0].event_y;
                 target[0][2] = round(target_bids[0].event_id);
                 target_valid = 1;
                 printf("Robot %d set target to event %d at (%.2f, %.2f)\n", robot_id, target_bids[0].event_id, target[0][0], target[0][1]);
             }else {
-                printf("Robot %d has no valid bid for event %d, not setting target\n", robot_id, msg.event_id);
+                //printf("Robot %d has no valid bid for event %d, not setting target\n", robot_id, msg.event_id);
                 target_valid = 0;
             }
         }
@@ -622,7 +622,7 @@ void update_state(int *distances)
     } else if (target_valid) {
         state = GO_TO_GOAL;
     } else {
-        printf("Robot %d has no valid target\n", robot_id);
+        //printf("Robot %d has no valid target\n", robot_id);
         state = DEFAULT_STATE;
     }
 }
@@ -680,8 +680,8 @@ void receive_local_bids()
                 
                 // If the other robot has a better (lower) bid, we should give up this event
                 if (received_bid.value < target_bids[i].value && received_bid.value >= 0) {
-                    printf("Robot %d: Other robot %d has better bid (%.2f < %.2f) for event %d, removing from my list\n",
-                           robot_id, received_bid.robot_id, received_bid.value, target_bids[i].value, received_bid.event_id);
+                    //printf("Robot %d: Other robot %d has better bid (%.2f < %.2f) for event %d, removing from my list\n",
+                    //       robot_id, received_bid.robot_id, received_bid.value, target_bids[i].value, received_bid.event_id);
                     
                     // Remove this bid from our list by shifting remaining bids left
                     for (j = i; j < 9; j++) {

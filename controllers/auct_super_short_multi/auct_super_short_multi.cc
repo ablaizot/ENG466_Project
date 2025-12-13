@@ -405,7 +405,18 @@ private:
         event->t_waiting_ = -1;
     }
   }
-
+// Re announced events that have timed out waiting
+  void ReAnnouncedEvents() {
+    // For each waiting event
+    for (auto& event : events_) {
+      if (clock_ - event->t_announced_ > EVENT_TIMEOUT)
+        event->restartAuction();
+        event->t_waiting_ = clock_;
+        //printf("TIMEOUT for event %d failed, set to wait\n", event->id_);
+        if (auction == event.get())
+          auction = NULL;
+      }
+  }
   // void handleRobotBiddings(event_queue_t& event_queue) {
   //   // Send and receive messages
   //   bid_t* pbid; // inbound
@@ -548,7 +559,8 @@ public:
       event_queue.emplace_back(event, MSG_EVENT_NEW);
       printf("A event %d announced\n", event->id_);
     }
-
+    // Re announce events that have timed out waiting
+    ReAnnouncedEvents();
     // Check if there are any new events to announce
     //handleAuctionEvents(event_queue);
  
