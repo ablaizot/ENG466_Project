@@ -47,9 +47,9 @@ WbDeviceTag leds[10];
 #define MAX_WORK_TIME (120.0*1000) // 120s of maximum work time
 #define MAX_SIMULATION_TIME (180.0*1000) // 180s of simulation time
 #define MAX_TASKS 1
-#define RATE_OF_MOVEMENT 30.0 // how much time required to travel 1 unit of distance (20 seconds per meter travelled)
+#define RATE_OF_MOVEMENT 25.0 // how much time required to travel 1 unit of distance (20 seconds per meter travelled)
 
-#define AVG_TASK_PER_SECOND (60.0/(MAX_SIMULATION_TIME*NUM_ROBOTS)*1000)
+#define AVG_TASK_PER_SECOND (60.0/(MAX_WORK_TIME*NUM_ROBOTS)*1000)
 
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */

@@ -1,4 +1,4 @@
-/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+  /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
  * file:        epuck_crown.c
  * author:      
  * description: E-puck file for market-based task allocations (DIS lab05)
@@ -38,26 +38,20 @@ WbDeviceTag leds[10];
 #define INVALID          -999
 #define BREAK            -999 //for physics plugin
 
-#define EVENT_RANGE (0.1)
+#define NUM_ROBOTS 5 // Change this also in the supervisor!
+#define EVENT_RANGE (0.09)
 
 #define MAX_WORK_TIME (120.0*1000) // 120s of maximum work time
 #define MAX_SIMULATION_TIME (180.0*1000) // 180s of simulation time
 #define MAX_TASKS 1
-#define RATE_OF_MOVEMENT 2.0 // how much time required to travel 1 unit of distance (2 seconds per meter travelled)
+#define RATE_OF_MOVEMENT 25.0 // how much time required to travel 1 unit of distance (2 seconds per meter travelled)
+#define AVG_TASK_PARAMETER 50.0
 
-#define AVG_TASK_PER_SECOND (20.0/(MAX_SIMULATION_TIME*NUM_ROBOTS)*1000)
-#define RADIO_RANGE 0.3 // in meters
+#define AVG_TASK_PER_SECOND (AVG_TASK_PARAMETER/(MAX_WORK_TIME*NUM_ROBOTS)*1000)
 
-
-/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
-/* Collective decision parameters */
-
-#define STATECHANGE_DIST 500   // minimum value of all sensor inputs combined to change to obstacle avoidance mode
+#define STATECHANGE_DIST 120   // minimum value of all sensor inputs combined to change to obstacle avoidance mode
 
 #define DEFAULT_STATE (STAY)
-
-/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
-/* e-Puck parameters */
 
 #define NB_SENSORS           8
 #define BIAS_SPEED           400
@@ -66,6 +60,7 @@ WbDeviceTag leds[10];
 // NOTE: Weights from reynolds2.h
 int Interconn[16] = {17,29,34,10,8,-38,-56,-76,-72,-58,-36,8,10,36,28,18};
 
+FILE *stat_file;
 
 // The state variables
 int clock;
@@ -74,15 +69,18 @@ robot_state_t state;                 // State of the robot
 double my_pos[3];           // X, Z, Theta of this robot
 char target_valid;          // boolean; whether we are supposed to go to the target
 double target[10][3];       // x and z coordinates of target position (max 10 targets)
-double all_targets[10][4]; // all known targets
 int lmsg, rmsg;             // Communication variables
 int indx;                   // Event index to be sent to the supervisor
 
 float buff[99];             // Buffer for physics plugin
 
 double stat_max_velocity;
-int worked_time = 0;
+int stat_moving_time = 0;
+int stat_avoiding_time = 0;
+int stat_task_time = 0;
+int stat_idle_time = 0;
 
+int worked_time = 0;
 
 // Proximity and radio handles
 WbDeviceTag emitter_tag, receiver_tag;
@@ -98,10 +96,50 @@ double rnd(void) {
   return ((double)rand())/((double)RAND_MAX);
 }
 
+
+
 double dist(double x0, double y0, double x1, double y1) {
     return sqrt((x0-x1)*(x0-x1) + (y0-y1)*(y0-y1));
 }
 
+typedef struct { double x, y; } Vec2;
+
+int orientation(Vec2 a, Vec2 b, Vec2 c) {
+    double v = (b.y - a.y) * (c.x - b.x) -
+               (b.x - a.x) * (c.y - b.y);
+    if (v > 0) return 1;   // clockwise
+    if (v < 0) return 2;   // counter-clockwise
+    return 0;              // collinear
+}
+int onSegment(Vec2 a, Vec2 x, Vec2 b) {
+    return (x.x <= fmax(a.x, b.x) && x.x >= fmin(a.x, b.x) &&
+            x.y <= fmax(a.y, b.y) && x.y >= fmin(a.y, b.y));
+}
+int segmentsIntersect(Vec2 A, Vec2 B, Vec2 C, Vec2 D) {
+    if (orientation(A, B, C) != orientation(A, B, D) && orientation(C, D, A) != orientation(C, D, B)) 
+        return 1;
+    return 0;
+}
+int intersectionPoint(Vec2 A, Vec2 B, Vec2 C, Vec2 D, Vec2 *out) {
+    double x1=A.x, y1=A.y, x2=B.x, y2=B.y;
+    double x3=C.x, y3=C.y, x4=D.x, y4=D.y;
+
+    double denom = (x1-x2)*(y3-y4) - (y1-y2)*(x3-x4);
+    if (fabs(denom) < 1e-9) return 0; // Parallel or collinear
+
+    double px = ((x1*y2 - y1*x2)*(x3 - x4) -
+                 (x1 - x2)*(x3*y4 - y3*x4)) / denom;
+
+    double py = ((x1*y2 - y1*x2)*(y3 - y4) -
+                 (y1 - y2)*(x3*y4 - y3*x4)) / denom;
+
+    Vec2 P = {px, py};
+
+    if (!onSegment(A, P, B) || !onSegment(C, P, D)) return 0;
+
+    *out = P;
+    return 1;
+}
 
 // calculate the value of waiting and not working for a time
 double calculate_time_value(float time) {
@@ -112,13 +150,45 @@ double calculate_time_value(float time) {
     return AVG_TASK_PER_SECOND * time * time_factor;
 }
 
+double calculate_distance_walls(double start_x, double start_y, double target_x, double target_y) {
+    Vec2 startPos = {start_x, start_y};
+    Vec2 targetPos = {target_x, target_y};
+
+    Vec2 line1_A = {-0.45-0.1875, 0.0}; // wall 1
+    Vec2 line1_B = {-0.45+0.1875, 0.0};
+
+    Vec2 line2_A = {0.125, 0.225-0.425}; // wall 2
+    Vec2 line2_B = {0.125, 0.225+0.425};
+    
+
+    Vec2 hit;
+    
+    double wall_factor = 2.0;
+
+    double distance = dist(start_x, start_y, target_x, target_y);
+
+    if (segmentsIntersect(startPos, targetPos, line1_A, line1_B)) {
+        if (intersectionPoint(startPos, targetPos, line1_A, line1_B, &hit)) {
+            //printf("Robot %d, crossed line 1 at: (%.2f, %.2f)\n", robot_id, hit.x, hit.y);
+            distance += wall_factor*dist(hit.x, hit.y, line1_B.x, line1_B.y) * 2;
+        }
+    } 
+
+    if (segmentsIntersect(startPos, targetPos, line2_A, line2_B)) {
+        if (intersectionPoint(startPos, targetPos, line2_A, line2_B, &hit)) {
+            //printf("Robot %d, crossed line 2 at: (%.2f, %.2f)\n", robot_id, hit.x, hit.y);
+            distance += wall_factor*dist(hit.x, hit.y, line2_A.x, line2_A.y) * 2;
+        }
+    } 
+    
+    return distance;
+}
+
 // Check if we received a message and extract information
 static void receive_updates() 
 {
     message_t msg;
     int target_list_length = 0;
-    int all_targets_length = 0;
-    while(round(all_targets[all_targets_length][2]) != INVALID){ all_targets_length++;}
     int i;
     int k;
 
@@ -154,9 +224,12 @@ static void receive_updates()
         // Event state machine
         if(msg.event_state == MSG_EVENT_GPS_ONLY)
         {
+            //printf("Original position of robot %d: %1.3f, %1.3f angle %1.3f\n",robot_id, my_pos[0], my_pos[1], my_pos[2]);
             my_pos[0] = msg.robot_x;
             my_pos[1] = msg.robot_y;
             my_pos[2] = msg.heading;
+            
+            //printf("New position of robot %d: %1.3f, %1.3f angle %1.3f\n",robot_id, my_pos[0], my_pos[1], my_pos[2]);
             continue;
         }
         else if(msg.event_state == MSG_QUIT)
@@ -165,6 +238,11 @@ static void receive_updates()
             wb_motor_set_velocity(left_motor, 0);
             wb_motor_set_velocity(right_motor, 0);
             wb_robot_step(TIME_STEP);
+            
+            fprintf(stat_file,"TERMINATED %d;%d;%d;%d\n",stat_moving_time, stat_avoiding_time, stat_task_time, stat_idle_time);
+    
+            fclose(stat_file);
+    
             exit(0);
         }
         else if(msg.event_state == MSG_EVENT_DONE)
@@ -180,28 +258,12 @@ static void receive_updates()
                         target[i][1] = target[i+1][1];
                         target[i][2] = target[i+1][2];
                     }
-                    target[target_list_length+1][2] = INVALID;
-                }
-            }
-            for(i=0; i<all_targets_length; i++)
-            {
-                if((int)round(all_targets[i][2]) == msg.event_id) 
-                { //look for correct id (in case wrong event was done first)
-                     for(; i<=all_targets_length; i++)
-                    { //push list to the left from event index
-                        all_targets[i][0] = all_targets[i+1][0];
-                        all_targets[i][1] = all_targets[i+1][1];
-                        all_targets[i][2] = all_targets[i+1][2];
-                        all_targets[i][3] = all_targets[i+1][3];
-                    }
+                    target[i+1][2] = INVALID;
+                    if(target_list_length-1 == 0) target_valid = 0; //used in general state machine 
+                    target_list_length = target_list_length-1;    
                 }
             }
             // adjust target list length
-            if(target_list_length-1 == 0) target_valid = 0; //used in general state machine 
-            target_list_length = target_list_length-1;
-            
-
-
         }
         else if(msg.event_state == MSG_EVENT_WON)
         {
@@ -214,12 +276,9 @@ static void receive_updates()
             }
             target[msg.event_index][0] = msg.event_x;
             target[msg.event_index][1] = msg.event_y;
-            target[msg.event_index][2] = msg.event_id % 10;
+            target[msg.event_index][2] = msg.event_id;
             target_valid = 1; //used in general state machine
             target_list_length = target_list_length+1;
-
-
-
         }
         // check if new event is being auctioned
         else if(msg.event_state == MSG_EVENT_NEW)
@@ -227,37 +286,9 @@ static void receive_updates()
             // ///*** BEST TACTIC ***///
 
             indx = 0;
-            double d = dist(my_pos[0], my_pos[1], msg.event_x, msg.event_y);
+            double d = calculate_distance_walls(my_pos[0], my_pos[1], msg.event_x, msg.event_y);
 
-            all_targets[msg.event_index][0] = msg.event_x;
-            all_targets[msg.event_index][1] = msg.event_y;
-            all_targets[msg.event_index][2] = msg.event_id % 10;
-            all_targets[msg.event_index][3] = msg.event_type; // mark as active
-
-
-            
-            // Set the target to the closest target assuming no other tasks
-            // Calculate bid based on distance + completion time
-            if(all_targets_length > 0)
-            {
-                for(i=0; i<all_targets_length; i++)
-                {
-                    uint32_t completion_time;
-                    if (all_targets[i][3] == 0) {     // Type A task
-                        completion_time = (robot_id % 2 == 0) ? 9: 3; // 3 or 9 seconds
-                    } else {                        // Type B task
-                        completion_time = (robot_id % 2 == 0) ? 1: 5; // 5 or 1 seconds
-                    }
-                    double dtemp = dist(my_pos[0], my_pos[1], all_targets[i][0], all_targets[i][1]) + completion_time;
-                    if(dtemp < d)
-                    {
-                        d = dtemp;
-                        indx = i;
-                    }
-                }
-            }
-
-             uint32_t completion_time;
+            uint64_t completion_time;
             if (msg.event_type == 0) {     // Type A task
                 completion_time = (robot_id % 2 == 0) ? 9: 3; // 3 or 9 seconds
             } else {                        // Type B task
@@ -267,14 +298,20 @@ static void receive_updates()
             if (target_list_length > 0) {
                 for (i = 0; i < target_list_length; i++) {
                     if (i == 0) {
-                        double dbeforetogoal = dist(my_pos[0], my_pos[1], msg.event_x, msg.event_y);
-                        double daftertogoal  = dist(target[i][0], target[i][1], msg.event_x, msg.event_y);
-                        double dbeforetodafter = dist(my_pos[0], my_pos[1], target[i][0], target[i][1]);
+                        double dbeforetogoal = calculate_distance_walls(my_pos[0], my_pos[1], msg.event_x, msg.event_y);
+                        double daftertogoal  = calculate_distance_walls(target[i][0], target[i][1], msg.event_x, msg.event_y);
+                        double dbeforetodafter = calculate_distance_walls(my_pos[0], my_pos[1], target[i][0], target[i][1]);
                         d = dbeforetogoal + daftertogoal - dbeforetodafter;
+                        if (i == target_list_length - 1) {
+                            if (daftertogoal < d) {
+                                d = daftertogoal;
+                                indx = i + 1;
+                            }
+                        }
                     } else {
-                        double dbeforetogoal = dist(target[i-1][0], target[i-1][1], msg.event_x, msg.event_y);
-                        double daftertogoal  = dist(target[i][0], target[i][1], msg.event_x, msg.event_y);
-                        double dbeforetodafter = dist(target[i-1][0], target[i-1][1], target[i][0], target[i][1]);
+                        double dbeforetogoal = calculate_distance_walls(target[i-1][0], target[i-1][1], msg.event_x, msg.event_y);
+                        double daftertogoal  = calculate_distance_walls(target[i][0], target[i][1], msg.event_x, msg.event_y);
+                        double dbeforetodafter = calculate_distance_walls(target[i-1][0], target[i-1][1], target[i][0], target[i][1]);
                         if ((dbeforetogoal + daftertogoal - dbeforetodafter) < d) {
                             d = dbeforetogoal + daftertogoal - dbeforetodafter;
                             indx = i;
@@ -288,15 +325,6 @@ static void receive_updates()
                     }
                 }
             }
-            
-           // set target to closest
-           target[0][0] = all_targets[indx][0];
-           target[0][1] = all_targets[indx][1];
-           target[0][2] = all_targets[indx][2];
-           target_valid = 1; //used in general state machine
-           target_list_length = 1;
-
-           
 
             double task_time = RATE_OF_MOVEMENT * d + completion_time;
 
@@ -314,7 +342,7 @@ static void receive_updates()
             // print bid
             //printf("Robot %d bidding %.2f for event %d at index %d\n", robot_id, d, msg.event_id, indx);
         
-            wb_emitter_set_channel(emitter_tag, -1);
+            wb_emitter_set_channel(emitter_tag, robot_id+1);
             wb_emitter_send(emitter_tag, &my_bid, sizeof(bid_t));
             // print emmitter channel
             //printf("Sent bid from robot %d on channel %d\n", robot_id, wb_emitter_get_channel(emitter_tag));            
@@ -417,8 +445,7 @@ void reset(void)
     // Link with webots nodes and devices (attention, use robot_id+1 as channels, because
     // channel 0 is reseved for physics plugin)
     emitter_tag = wb_robot_get_device("emitter");
-    wb_emitter_set_range(emitter_tag, RADIO_RANGE);
-    wb_emitter_set_channel(emitter_tag, -1);
+    wb_emitter_set_channel(emitter_tag, robot_id+1);
 
     receiver_tag = wb_robot_get_device("receiver");
     wb_receiver_enable(receiver_tag, RX_PERIOD); // listen to incoming data every 1000ms
@@ -432,14 +459,9 @@ void reset(void)
 }
 
 
-void update_state(int _sum_distances)
+void update_state(int *distances)
 {
-    static robot_state_t prev_state = DEFAULT_STATE;
-    
-    // compute distance to goal
-    float a = target[0][1] - my_pos[0];
-    float b = target[0][1] - my_pos[1];
-    float task_dist = sqrt(a*a + b*b);
+    int obstacle_detected_now = 0;
     
     wb_led_set(leds[8], 0);
 
@@ -459,73 +481,73 @@ void update_state(int _sum_distances)
             
             const bid_t my_bid = {robot_id, round(target[i][2]), -1, i};
             printf("Robot %d abandonning event %1.0f :(\n", robot_id, target[i][2]);
-            wb_emitter_set_channel(emitter_tag, -1);
+            wb_emitter_set_channel(emitter_tag, robot_id+1);
             wb_emitter_send(emitter_tag, &my_bid, sizeof(bid_t));
         }
         return;
     }
 
-    if (_sum_distances > STATECHANGE_DIST && state == GO_TO_GOAL) {
-        if (prev_state != OBSTACLE_AVOID) {
-            printf("Robot %d: State transition %d -> OBSTACLE_AVOID\n", robot_id, prev_state);
-        }
-        state = OBSTACLE_AVOID;
-    } else if (target_valid && task_dist >= EVENT_RANGE) {
-        if (prev_state != GO_TO_GOAL) {
-            printf("Robot %d: State transition %d -> GO_TO_GOAL\n", robot_id, prev_state);
-        }
-        state = GO_TO_GOAL;
-    } else if (target_valid) {
-        if (prev_state != DOING_TASK) {
-            printf("Robot %d: State transition %d -> DOING_TASK\n", robot_id, prev_state);
-        }
+    if (target_valid && dist(my_pos[0], my_pos[1], target[0][0], target[0][1]) < EVENT_RANGE)
+    {
         state = DOING_TASK;
-        wb_led_set(leds[8], 1);
-    } else {
-        if (prev_state != DEFAULT_STATE) {
-            printf("Robot %d: State transition %d -> %d (DEFAULT)\n", robot_id, prev_state, DEFAULT_STATE);
-        }
-        state = DEFAULT_STATE;
+        return;
     }
     
-    prev_state = state;
+
+    for(int i=0; i < NB_SENSORS; i++) 
+    {
+        distances[i] = wb_distance_sensor_get_value(ds[i]);
+        if (distances[i] > STATECHANGE_DIST) 
+        {
+            obstacle_detected_now = 1;
+        }
+    }
+    
+    if (obstacle_detected_now) {
+        state = OBSTACLE_AVOID;  
+    } else if (target_valid) {
+        state = GO_TO_GOAL;
+    } else {
+        state = DEFAULT_STATE;
+    }
 }
 
-// RUN e-puck
 void run(int ms)
 {
     float msl_w, msr_w;
     // Motor speed and sensor variables	
     int msl=0,msr=0;                // motor speed left and right
     int distances[NB_SENSORS];  // array keeping the distance sensor readings
-    int sum_distances=0;        // sum of all distance sensor inputs, used as threshold for state change.  	
+    //int sum_distances=0;        // sum of all distance sensor inputs, used as threshold for state change.  	
 
     // Other variables
-    int sensor_nb;
+    //int sensor_nb;
 
     // Add the weighted sensors values
-    for(sensor_nb=0;sensor_nb<NB_SENSORS;sensor_nb++)
+    /*for(sensor_nb=0;sensor_nb<NB_SENSORS;sensor_nb++)
     {  
         distances[sensor_nb] = wb_distance_sensor_get_value(ds[sensor_nb]);
         sum_distances += distances[sensor_nb];
-    }
+    }*/
 
     // Get info from supervisor
     receive_updates();
 
     // State may change because of obstacles
-    update_state(sum_distances);
+    update_state(distances);
 
     // Set wheel speeds depending on state
     switch (state) {
         case STAY:
             msl = 0;
             msr = 0;
+            stat_idle_time += ms;
             break;
 
         case DOING_TASK:
             msl = 0;
             msr = 0;
+            stat_task_time += ms;
             break;
 
         case DISABLED:
@@ -535,10 +557,12 @@ void run(int ms)
 
         case GO_TO_GOAL:
             compute_go_to_goal(&msl, &msr);
+            stat_moving_time += ms;
             break;
 
         case OBSTACLE_AVOID:
             compute_avoid_obstacle(&msl, &msr, distances);
+            stat_avoiding_time += ms;
             break;
 
         case RANDOM_WALK:
@@ -550,29 +574,43 @@ void run(int ms)
             printf("Invalid state: robot_id %d \n", robot_id);
     }
     // Set the speed
+    
+    //printf("Robot %d speeds %d, %d\n", robot_id, msl, msr);
     msl_w = msl*MAX_SPEED_WEB/1000;
     msr_w = msr*MAX_SPEED_WEB/1000;
     wb_motor_set_velocity(left_motor, msl_w);
     wb_motor_set_velocity(right_motor, msr_w);
-    update_self_motion(msl, msr);
+    double velocity = update_self_motion(msl, msr);
 
     if (state != STAY && state != DISABLED) {
         worked_time += ms;
-        //printf("Worked for %0.2f \n", worked_time);
+        //printf("Worked for %d \n", worked_time);
     }
 
     // Update clock
     clock += ms;
+    
+    if (clock % 1024 == 0) {
+      fprintf(stat_file,"%d/%d; %f\n",worked_time, clock, velocity);
+    }
 }
+
 
 // MAIN
 int main(int argc, char **argv) 
 {
     reset();
   
+    char filename[64];
+    sprintf(filename, "../../tmp/robot%d.txt", robot_id);
+    stat_file = fopen(filename, "a");
+
+    
     // RUN THE MAIN ALGORIHM
     while (wb_robot_step(TIME_STEP) != -1) {run(TIME_STEP);}
+
     wb_robot_cleanup();
+
 
     return 0;
 }

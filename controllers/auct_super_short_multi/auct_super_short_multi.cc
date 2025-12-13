@@ -613,6 +613,10 @@ public:
       printf("Performance: %f\n", perf);
 
       FILE* f = fopen("../../tmp/short_multi_events_handled.txt","a");
+      if (!f) {
+        printf("Error opening output file!\n");
+        exit(1);
+      }
       fprintf(f,"%d\n",num_events_handled_);
       fclose(f);
       
