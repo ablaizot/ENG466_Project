@@ -50,8 +50,30 @@ def plot_macro(working, dt):
 
 
 def histogram(data):
-    plt.hist(data, bins=20)      # number of bins can be adjusted
+    plt.hist(data, bins=61)      # number of bins can be adjusted
     plt.xlabel("Value")
     plt.ylabel("Frequency")
     plt.title("Histogram of Float Values")
+    plt.show()
+
+def plot_all(micro_matrix, mili_matrix, macro, dt):
+    micro_active = np.sum(np.array(micro_matrix), axis=1)
+    mili_active = np.sum(np.array(mili_matrix), axis=1)
+    t = np.arange(len(macro)) * dt
+
+    # Plot
+    plt.figure(figsize=(10, 4))
+    plt.plot(t, micro_active, label="Micro")
+    plt.plot(t, mili_active, label="Mili")
+    plt.plot(t, macro, label="Macro")
+    plt.xlabel("Time [s]")
+    plt.ylabel("Number of robots working")
+    plt.title("Active robots over time")
+    plt.legend()
+
+    # Set x-axis ticks every 20 seconds
+    max_t = t[-1]
+    plt.xticks(np.arange(0, max_t + 1, 20))
+
+    plt.tight_layout()
     plt.show()
