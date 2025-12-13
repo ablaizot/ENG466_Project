@@ -185,7 +185,11 @@ public:
 
   void markDone(uint64_t clk) {
     t_done_ = clk;
-    double event_node_pos[3] = {-5,-5,0.1};
+    double event_node_pos[3] = {-5,-5,-5};
+    pos_.x = -5.0;
+    pos_.y = -5.0;
+    
+
     wb_supervisor_field_set_sf_vec3f(wb_supervisor_node_get_field(node_,"translation"),
                                      event_node_pos);
     g_event_nodes_free.push_back(node_);
@@ -226,10 +230,7 @@ private:
     // print new event with event type 0 = type A, 1 = type B
     printf("N event %d added at (%.2f, %.2f) of type %d\n", 
       events_.back()->id_, events_.back()->pos_.x, events_.back()->pos_.y,
-      events_.back()->task_type_);
-    
-
-    
+      events_.back()->task_type_);    
   }
 
   // Init robot and get robot_ids and receivers
@@ -328,18 +329,24 @@ private:
               }
 
               // Increment time in range
-              event->robot_time_in_range_[i] += STEP_SIZE;
               
+              event->robot_time_in_range_[i] += STEP_SIZE;
+              // printf("Robot %d is within range of event %d, time in range: %u ms\n", 
+              //     i, event->id_, event->robot_time_in_range_[i]);
               // Check if robot has been in range long enough
               if (event->robot_time_in_range_[i] >= completion_time) {
                   printf("D robot %d completed event %d after %u ms in range\n", 
                       i, event->id_, event->robot_time_in_range_[i]);
                   num_events_handled_++;
+                  
                   event->markDone(clock_);
                   num_active_events_--;
+                  event->robot_time_in_range_[i] = 0;
                   event_queue.emplace_back(event.get(), MSG_EVENT_DONE);
                   restartWaitingEvents(event_queue);
+                  
               }
+               
           } else {
               // Reset time in range if robot moves out of range
               event->robot_time_in_range_[i] = 0;
@@ -482,10 +489,43 @@ public:
       DBG(("Missing supervisor emitter!\n"));
       exit(1);
     }
+    event_queue_t event_queue;
+
     // add the first few events
     for (int i=0; i<NUM_ACTIVE_EVENTS; ++i) {
       addEvent();
+      Event* event = events_.back().get();
+      event->t_announced_ = clock_;
+      event->t_waiting_ = -1;
+      event_queue.emplace_back(event, MSG_EVENT_NEW);
+      printf("A event %d announced\n", event->id_);
     }
+
+    // outbound
+    message_t msg;
+
+     for (int i=0;i<NUM_ROBOTS;i++) {
+      // Send updates to the robot
+      while (wb_emitter_get_channel(emitter_) != i+1)
+      wb_emitter_set_channel(emitter_, i+1);
+      
+      for (const auto& e_es_tuple : event_queue) {
+        const Event* event = e_es_tuple.first;
+        const message_event_state_t event_state = e_es_tuple.second;
+
+        // Robot might accidentaly complete task of other robot -> send event done to everyone
+        if (event->is_assigned() && event->assigned_to_ != i && !event->is_done()) continue; 
+
+        buildMessage(i, event, event_state, &msg);
+        while (wb_emitter_get_channel(emitter_) != i+1)
+              wb_emitter_set_channel(emitter_, i+1);        
+//        printf("> Sent message to robot %d // event_state=%d\n", i, event_state);
+//        printf("sending message event %d , robot %d , emitter %d, channel %d\n",msg.event_id,msg.robot_id,emitter_,      wb_emitter_get_channel(emitter_));
+        
+        wb_emitter_send(emitter_, &msg, sizeof(message_t));
+      }
+    }
+
   }
 
   //Do a step
@@ -502,10 +542,11 @@ public:
     // ** Add a random new event, if the time has come
     if (num_active_events_ < NUM_ACTIVE_EVENTS) {
       addEvent();
-        event->t_announced_ = clock_;
-        event->t_waiting_ = -1;
-        event_queue.emplace_back(event.get(), MSG_EVENT_NEW);
-        printf("A event %d announced\n", event->id_); 
+      Event* event = events_.back().get();
+      event->t_announced_ = clock_;
+      event->t_waiting_ = -1;
+      event_queue.emplace_back(event, MSG_EVENT_NEW);
+      printf("A event %d announced\n", event->id_);
     }
 
     // Check if there are any new events to announce
@@ -558,6 +599,7 @@ public:
 
     // Time to end the experiment?
     if (MAX_RUNTIME > 0 && clock_ >= MAX_RUNTIME) {
+
       for(int i=0;i<NUM_ROBOTS;i++){
           buildMessage(i, NULL, MSG_QUIT, &msg);
           wb_emitter_set_channel(emitter_, i+1);
@@ -570,6 +612,15 @@ public:
       printf("Handled %d events in %d seconds, events handled per second = %.2f\n",
              num_events_handled_, (int) clock_ / 1000, ehr);
       printf("Performance: %f\n", perf);
+
+      FILE* f = fopen("../../tmp/short_events_handled.txt","a");
+      fprintf(f,"%d\n",num_events_handled_);
+      fclose(f);
+      
+      FILE* f_ack = fopen("../../tmp/webots_done","w");
+      fprintf(f_ack,"DONE!");
+      fclose(f_ack);
+
       return false;
     } 
     else { return true;} //continue

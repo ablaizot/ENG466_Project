@@ -1,4 +1,5 @@
 import os
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 import argparse
@@ -137,15 +138,35 @@ def load_robot_file(filename, expected_runs):
     return runs
 
 
-# ------------ MAIN LOADING LOGIC ------------
+# ------------ PARSE COMMAND LINE ARGUMENTS ------------
 
-events_counts = load_events_counts("events_handled.txt")
+if len(sys.argv) != 2:
+    print("Usage: python process.py <mode>")
+    print("  mode: 'normal' or 'short' (for short-range epuck)")
+    sys.exit(1)
+
+mode = sys.argv[1].lower()
+
+if mode not in ['normal', 'short']:
+    print("Error: mode must be 'normal' or 'short'")
+    sys.exit(1)
+
+print(f"=== ANALYZING {mode.upper()} RANGE DATA ===\n")
+
+# ------------ MAIN LOADING LOGIC ------------
+events_file = "events_handled.txt"
+if mode == 'short':
+    events_file = "short_events_handled.txt"
+events_counts = load_events_counts(events_file)
 expected_runs = len(events_counts)
 
 all_robots = {}
 
 for i in range(5):
     robot_file = f"robot{i}.txt"
+
+    if mode == 'short':
+        robot_file = f"short_robot{i}.txt"
     if os.path.exists(robot_file):
         runs = load_robot_file(robot_file, expected_runs)
         all_robots[i] = runs
