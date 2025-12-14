@@ -29,7 +29,7 @@ def plot_active_robots(working_matrix, dt):
     plt.tight_layout()
     plt.show()
 
-def plot_macro(working, dt):
+def plot_working(working, dt):
     # Create timestamps in seconds
     timesteps = len(working)
     t = np.arange(timesteps) * dt
@@ -49,11 +49,11 @@ def plot_macro(working, dt):
     plt.show()
 
 
-def histogram(data):
-    plt.hist(data, bins=61)      # number of bins can be adjusted
+def histogram(data, bins, title):
+    plt.hist(data, bins=bins)      # number of bins can be adjusted
     plt.xlabel("Value")
     plt.ylabel("Frequency")
-    plt.title("Histogram of Float Values")
+    plt.title(title)
     plt.show()
 
 def plot_all(micro_matrix, mili_matrix, macro, dt):

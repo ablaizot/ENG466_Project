@@ -1,6 +1,11 @@
-import micro_simple, micro
+import sys, os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import micro_simple
+import micro
 import macro_travel as macro
 from plotting import *
+
+
 
 macro_simulator = macro.Simulation()
 macro_simulator.run_simulation()

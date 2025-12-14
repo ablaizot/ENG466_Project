@@ -24,7 +24,8 @@ class Robot:
             return
 
         if self.working:
-            self.worked_time += ms
+            if self.simulation.clock >= 0:
+                self.worked_time += ms
             self.work_to_do -= ms
 
             if self.work_to_do <= 0:
@@ -59,7 +60,8 @@ class Simulation:
             for robot in self.robots:
                 robot.step(self.dt)
             self.clock += self.dt
-            self.stat_robot_working += [[robot.working for robot in self.robots]]
+            if self.clock >= self.dt:
+                self.stat_robot_working += [[robot.working for robot in self.robots]]
 
     def get_task_time(self):
         robots_working = sum([robot.working for robot in self.robots]*1)

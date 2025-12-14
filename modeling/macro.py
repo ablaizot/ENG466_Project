@@ -7,6 +7,11 @@ class Simulation:
         self.idle = [1.5]
         self.working = [3.5]
         self.started_working = [3.5]
+
+        self.work_mean_time = 16
+        self.idle_mean_time = 11.5
+        self.rework_chance = 0.2
+
         self.clock = 0
         self.dt = 0.032
         self.work_fallof = 11.5 # set this, so the total worktime is 120 in the end
@@ -14,20 +19,20 @@ class Simulation:
         self.worked_time = 0
 
     def step(self):
-        task_quality = self.dt/12#0.01
+        task_quality = self.dt/self.idle_mean_time
         #end_timer = (max(0, self.max_work_time - self.worked_time)/self.max_work_time)**0.2
         end_timer = (self.max_work_time >= self.worked_time)*1
 
         simulation_time_remain = (MAX_SIMULATION_TIME - self.clock) * self.N
         work_time_remain = (self.N*MAX_WORK_TIME - self.worked_time)
-        wait_quality = (simulation_time_remain - work_time_remain) / (MAX_SIMULATION_TIME - MAX_WORK_TIME) / self.N
+        wait_quality = ((simulation_time_remain - work_time_remain) / (MAX_SIMULATION_TIME - MAX_WORK_TIME) / self.N)**2
 
         p_work = task_quality / wait_quality * end_timer
         #print(self.clock, p_work)
         begin_work = p_work * self.idle[-1]
         self.started_working += [begin_work]
 
-        p_stop = self.dt/16
+        p_stop = self.dt/self.work_mean_time
         # available_to_stop = 0
         # index = int(10/self.dt)
         # max_work_time = int(40/self.dt)
@@ -42,7 +47,7 @@ class Simulation:
         for a in range(1, falloff_detect):
             falloff += (p_stop ** a) * (1-p_stop) ** (falloff_detect-a)
 
-        begin_work += 0.5 * stop_work * end_timer
+        begin_work += self.rework_chance * stop_work * end_timer
 
         self.idle += [self.idle[-1] - begin_work + stop_work]
         self.working += [self.working[-1] + begin_work - stop_work]

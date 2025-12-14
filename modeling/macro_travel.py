@@ -11,14 +11,15 @@ class Simulation:
         self.started_doing = [0]
         self.clock = -self.start_timer # some time to get it stable
         self.dt = 0.032
-        self.work_fallof = 14.5 # set this, so the total worktime is 120 in the end
+        self.work_fallof = 13.5 # set this, so the total worktime is 120 in the end
         self.max_work_time = (MAX_WORK_TIME-self.work_fallof)*self.N
         self.worked_time = 0
         self.working = []
 
         self.p_stop = self.dt/16.2 # This is the mean time of travel
         self.p_work = self.dt/11.8 # Mean time of waiting
-        self.work_time = int(9/self.dt)
+        self.p_rework = 0.2
+        self.work_time = int(8/self.dt)
 
     def step(self):
         end_timer = (self.max_work_time >= self.worked_time)*1
@@ -34,7 +35,7 @@ class Simulation:
         start_doing = p_finish_travelling * self.travelling[-1]
         stop_working = self.started_doing[-1-self.work_time] if self.work_time < len(self.started_doing) else 0
 
-        start_travelling += 0.5 * stop_working * end_timer
+        start_travelling += self.p_rework * stop_working * end_timer
 
         self.started_doing += [start_doing]
         self.idle += [self.idle[-1] - start_travelling + stop_working]

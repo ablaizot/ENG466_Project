@@ -350,7 +350,7 @@ def generate_latex_table():
         f.write(latex_content)
     print("\nLaTeX table saved to simulation_results.tex")
 
-def plot_group(group_name, scenario_keys):
+def plot_group(group_name, scenario_keys, ground_truth=[]):
     plt.figure(figsize=(10, 5))
     plotted_any = False
     
@@ -368,11 +368,14 @@ def plot_group(group_name, scenario_keys):
             plt.plot(time, avg, color=conf["color"], linewidth=2, label=conf["label"])
             plt.fill_between(time, avg - std, avg + std, color=conf["color"], alpha=0.15)
             print(f"  Loaded {len(runs)} runs.")
+            if len(ground_truth) != 0:
+                gt = np.arange(len(ground_truth)) * 0.032
+                plt.plot(gt, ground_truth, color="black", linewidth=2, linestyle="--", label="Microscopic (1000 runs avg)")
         else:
             print(f"  No data found for {key}.")
 
     if plotted_any:
-        plt.xlabel("Time step (≈1.024 s each)")
+        plt.xlabel("Simulation time [s]")
         plt.ylabel("Number of robots working")
         plt.ylim(0, 5.5)
         plt.xlim(0, time[-1])
@@ -390,10 +393,18 @@ def main():
     
     # Generate Table
     generate_latex_table()
+
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+    import modeling.micro as micro
+
+    ground_truth_single = micro.get_work_time(max_tasks_assigned=1, runs=1000)
+    ground_truth_multi = micro.get_work_time(max_tasks_assigned=3, runs=1000)
     
     # Generate Plots
-    plot_group("Centralized", ["centralized_single", "centralized_multi"])
-    plot_group("Distributed", ["short_single", "short_multi"])
+    #plot_group("Centralized", ["centralized_single", "centralized_multi"])
+    plot_group("Centralized single-step planning", ["centralized_single"], ground_truth_single)
+    plot_group("Centralized multi-step planning", ["centralized_multi"], ground_truth_multi)
+    #plot_group("Distributed", ["short_single", "short_multi"])
 
 if __name__ == "__main__":
     main()

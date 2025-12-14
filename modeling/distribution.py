@@ -2,7 +2,7 @@ from plotting import *
 import numpy as np
 import random
 
-distribution = np.load("distribution_all.npy")
+distribution = np.load("modeling/distribution_all.npy")
 distribution /= sum(distribution)
 
 import matplotlib.pyplot as plt

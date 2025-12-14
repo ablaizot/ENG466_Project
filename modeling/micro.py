@@ -1,9 +1,10 @@
 from random import uniform
 import math
-from bidding import *
+from .bidding import *
 import heapq
-from plotting import *
+from .plotting import *
 import numpy as np
+from .constants import *
 
 DEBUG = False
 
@@ -80,7 +81,7 @@ class Robot:
 
     # calculate work time for a given task and bid with time
     def bid_for_task(self, task):
-        if len(self.tasks) >= MAX_TASKS_ASSIGNED:
+        if len(self.tasks) >= self.auctioneer.max_tasks_assigned:
             return -1, -1  # Cannot take more tasks
 
         task_time = TASK_WORK_TIMES[task.type][self.type]
@@ -143,7 +144,7 @@ class Robot:
     
 
 class Auctioneer:
-    def __init__(self, simulation=None):
+    def __init__(self, max_tasks_assigned, simulation=None):
         self.robots = []
         for robot_type in range(NUMBER_OF_TYPES):
             self.robots += [Robot(robot_type, self, len(self.robots)+1+i) for i in range(ROBOT_COUNTS[robot_type])]
@@ -151,6 +152,7 @@ class Auctioneer:
         self.tasks = []
         self.tasks_to_auction = []
         self.simulation = simulation
+        self.max_tasks_assigned = max_tasks_assigned
 
         for _ in range(TASK_COUNT):
             self.create_task()
@@ -215,11 +217,11 @@ class Auctioneer:
     
 
 class Simulation:
-    def __init__(self):
+    def __init__(self, max_tasks_assigned=MAX_TASKS_ASSIGNED):
         self.clock = 0
         self.dt = 0.032
         self.statistics = Statistics()
-        self.auctioneer = Auctioneer(self)
+        self.auctioneer = Auctioneer(max_tasks_assigned, self)
 
     def run_simulation(self):
         while self.clock <= MAX_SIMULATION_TIME:
@@ -229,6 +231,15 @@ class Simulation:
             self.statistics.robot_working += [[robot.working_now for robot in self.auctioneer.robots]]
 
 
+def get_work_time(max_tasks_assigned, runs=100):
+    average_robot_working = []
+    for _ in range(runs):
+        simulation = Simulation(max_tasks_assigned)
+        simulation.run_simulation()
+        average_robot_working += [simulation.statistics.robot_working]
+
+    return np.sum(np.array(average_robot_working)*1/runs, axis=(0, 2))
+
 
 if __name__ == "__main__":
     simulation = Simulation()
@@ -237,47 +248,51 @@ if __name__ == "__main__":
 
     #plot_active_robots(simulation.statistics.robot_working, simulation.dt)
 
-    average_robot_working = np.array(simulation.statistics.robot_working)*1
+    average_robot_working = []
     worked_times = []
     received_bids = []
     idle_times = []
+    total_tasks = []
 
     tasks = 0
-    NUM_SIMUL = 100
+    NUM_SIMUL = 1000
     import time
     start_time = time.time()
     for a in range(NUM_SIMUL):
         simulation = Simulation()
         simulation.run_simulation()
         tasks += simulation.statistics.completed_tasks
-        average_robot_working += np.array(simulation.statistics.robot_working)*1
+        average_robot_working += [simulation.statistics.robot_working]
         worked_times += simulation.statistics.task_times
         received_bids += simulation.statistics.received_bids
         idle_times += simulation.statistics.idle_times
+        total_tasks += [simulation.statistics.completed_tasks]
 
     print(f"Run time is {(time.time()-start_time)/NUM_SIMUL}")
 
 
+
     print(f"Completed all simulations, average tasks: {tasks/NUM_SIMUL}")
-    histogram(received_bids)
-    histogram(worked_times)    
+    histogram(total_tasks, 20, "Histogram of tasks completed per 1000 runs")
+    histogram(received_bids, 100, "Histogram of received bids per 1000 runs")
+    histogram(worked_times, 100, "Histogram of worked times per 1000 runs")    
+    histogram(idle_times, 100, "Histogram of idle times per 1000 runs")
     print("Work time mean:", np.mean([time for time in worked_times if time >10]))
     zero_prop = sum([1 for value in idle_times if value <0.1]) / len([1 for value in idle_times if value >=0.1])
     print("Work right after change:", zero_prop, "%")
     idle_times = [value for value in idle_times if value <= 30 and value >=0.1]
     print("Idle mean time", np.mean(idle_times))
-    histogram(idle_times)
     import numpy as np
     
 
     # This is used to get the distribution for the Mili model
-    # max_value = 60
-    # distribution = np.array([0 for _ in range(10*max_value+1)], dtype=float)
-    # for value in worked_times:
-    #     index = int(round(value*10))
-    #     if index <= 10*max_value:
-    #         distribution[index] += 1
-    # distribution /= len(worked_times)
-    # np.save("distribution.npy", distribution)
-
-    plot_active_robots(average_robot_working/(NUM_SIMUL+1.0), simulation.dt)
+    max_value = 60
+    distribution = np.array([0 for _ in range(10*max_value+1)], dtype=float)
+    for value in worked_times:
+        index = int(round(value*10))
+        if index <= 10*max_value:
+            distribution[index] += 1
+    distribution /= len(worked_times)
+    np.save("distribution_all.npy", distribution)
+    working = np.sum(np.array(average_robot_working)*1/(NUM_SIMUL), axis=(0, 2))
+    plot_working(working, simulation.dt)
